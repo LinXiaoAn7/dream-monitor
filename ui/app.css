@@ -931,4 +931,54 @@ body {
 
 .auth-submit { min-width: 120px; padding: var(--s2) var(--s5); }
 
+/* ============================ 我的活动 ============================ */
+.mine { display: flex; flex-direction: column; }
 
+.m-row {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  gap: var(--s3);
+  align-items: center;
+  padding: var(--s4) 0;
+  border-bottom: 1px solid var(--border-hair);
+  cursor: pointer;
+  transition: background 150ms var(--ease-out);
+}
+
+.m-row:hover { background: var(--surface-sunken); }
+
+.m-idx {
+  font-size: 11px; letter-spacing: .08em;
+  color: var(--text-mute);
+  font-variant-numeric: tabular-nums;
+}
+
+.m-main { min-width: 0; }
+
+.m-title {
+  margin: 0 0 var(--s2);
+  font-size: 15px; font-weight: 400; line-height: 1.35;
+  color: var(--text-strong);
+}
+
+.m-meta {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3);
+  font-size: 11px; letter-spacing: .04em;
+  color: var(--text-mute);
+}
+
+.m-time { color: var(--text-body); }
+
+.m-state { font-size: 12px; letter-spacing: .06em; color: var(--text-body); }
+.m-state.s-open { color: var(--signal); }
+.m-state.s-ended { color: var(--text-mute); }
+
+.tag--mine { color: var(--signal); border-color: var(--signal); }
+
+.btn--done, .btn--done[disabled] {
+  opacity: 1;
+  cursor: default;
+  color: var(--text-mute);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-hair);
+}

@@ -210,8 +210,9 @@ async function openDetail(aid) {
   let action = "";
   if (mine) {
     action = `<div class="d-actions">
+      <button class="btn btn--done" id="d-joined" type="button" disabled>已报名</button>
       <button class="btn btn--ghost" id="d-cancel" type="button" ${canCancel ? "" : "disabled"}>取消报名</button>
-      <span class="d-hint">${canCancel ? "已报名，可以取消" : "已报名，当前不可取消"}</span>
+      <span class="d-hint">${canCancel ? "可以取消报名" : "当前不可取消"}</span>
     </div>`;
   } else if (canJoin) {
     action = `<div class="d-actions">
@@ -303,6 +304,7 @@ async function afterSignupChange(aid, msg) {
   detailCache.delete(aid);
   await pull();                 // 列表里的「已报名」标记
   await openDetail(aid);        // 抽屉里的按钮状态
+  if (view === "mine") await loadMine();
   toast(msg);
 }
 
@@ -316,16 +318,71 @@ function closeDetail() {
 let view = "board";
 
 function setView(name, push = true) {
-  view = name === "score" ? "score" : "board";
+  view = ["score", "mine"].includes(name) ? name : "board";
   $("v-board").hidden = view !== "board";
   $("v-score").hidden = view !== "score";
+  $("v-mine").hidden = view !== "mine";
   document.querySelectorAll(".rail-item").forEach((b) =>
     b.classList.toggle("is-on", b.dataset.v === view));
   if (push) {
-    const h = view === "score" ? "#score" : "#board";
+    const h = view === "score" ? "#score" : (view === "mine" ? "#mine" : "#board");
     if (location.hash !== h) history.replaceState(null, "", h);
   }
   if (view === "score") loadScore();
+  if (view === "mine") loadMine();
+}
+
+/* ---------------- 我的活动 ---------------- */
+let mineState = { items: [], at: 0 };
+
+async function loadMine() {
+  const list = $("mine-list");
+  try {
+    const r = await fetch("/api/mine", { credentials: "same-origin" });
+    if (r.status === 401) { location.replace("/login.html"); return; }
+    const j = await r.json();
+    mineState = { items: j.items || [], at: j.at || 0 };
+  } catch (e) {
+    list.innerHTML = `<p class="empty">读取失败：${esc(String(e.message || e))}</p>`;
+    return;
+  }
+  renderMine();
+}
+
+function renderMine() {
+  const list = $("mine-list");
+  const items = mineState.items || [];
+  $("mine-who").textContent = items.length
+    ? `已报名 ${items.length} 个活动` + (mineState.at ? ` · 读取于 ${fmtClock(mineState.at)}` : "")
+    : "";
+  if (!items.length) {
+    list.innerHTML = `<p class="empty">还没有报名任何活动。去「活动」里挑一个，报名后这里就会出现。</p>`;
+    return;
+  }
+  list.innerHTML = items.map((it, i) => `
+    <article class="m-row" data-aid="${esc(it.aid)}" tabindex="0">
+      <span class="m-idx">${String(i + 1).padStart(2, "0")}</span>
+      <div class="m-main">
+        <h3 class="m-title">${esc(it.name)}</h3>
+        <div class="m-meta">
+          <span class="tag tag--mine">已报名</span>
+          <span>${esc(it.category || "—")}</span>
+          <span class="m-time">${esc(it.time || "")}</span>
+        </div>
+      </div>
+      <span class="m-state s-${esc(it.state)}">${esc(it.status_text || "")}</span>
+    </article>`).join("");
+  list.querySelectorAll(".m-row").forEach((el) => {
+    const go = () => openDetail(el.dataset.aid);
+    el.addEventListener("click", go);
+    el.addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
+  });
+}
+
+function fmtClock(ts) {
+  const d = new Date((ts || 0) * 1000);
+  const p = (n) => String(n).padStart(2, "0");
+  return `${p(d.getMonth() + 1)}.${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
 $("rail").addEventListener("click", (e) => {
@@ -556,11 +613,11 @@ function setAvatar(me) {
 }
 
 pull();
-setView(location.hash === "#score" ? "score" : "board", false);
+setView(location.hash === "#score" ? "score" : (location.hash === "#mine" ? "mine" : "board"), false);
 
 // 支持 #aid=xxx 直接打开详情
 window.addEventListener("hashchange", () => {
-  if (location.hash === "#score" || location.hash === "#board") {
+  if (["#score", "#board", "#mine"].includes(location.hash)) {
     setView(location.hash.slice(1), false);
     return;
   }

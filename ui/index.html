@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>到梦空间 · 活动看板</title>
-<link rel="stylesheet" href="/app.css?v=2.0.5">
+<link rel="stylesheet" href="/app.css?v=2.0.7">
 </head>
 <body>
 <div class="app">
@@ -34,7 +34,8 @@
   <div class="shell">
     <nav class="rail" id="rail" aria-label="主导航">
       <button class="rail-item is-on" data-v="board" type="button">活动</button>
-      <button class="rail-item" data-v="score" type="button">积分</button>
+      <button class="rail-item" data-v="mine" type="button">我的活动</button>
+        <button class="rail-item" data-v="score" type="button">积分</button>
     </nav>
 
     <div class="pane">
@@ -94,6 +95,12 @@
 
       </section>
 
+      <section class="view" id="v-mine" hidden>
+        <h1 class="page-title">我的活动</h1>
+        <p class="score-who" id="mine-who"></p>
+        <div class="mine" id="mine-list"><p class="empty">正在读取…</p></div>
+      </section>
+
       <section class="view" id="v-score" hidden>
         <h1 class="page-title">我的积分</h1>
         <p class="score-who" id="sc-who"></p>
@@ -144,6 +151,6 @@
     </div>
   </div>
 </div>
-<script src="/app.js?v=2.0.5"></script>
+<script src="/app.js?v=2.0.7"></script>
 </body>
 </html>

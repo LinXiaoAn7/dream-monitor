@@ -51,7 +51,9 @@ SLIM_KEYS = ("aid", "name", "state", "status_raw", "quota", "joined", "capacity"
 DETAIL_KEYS = ("activityId", "activityName", "statusText", "joinNum", "joinmaxnum",
                "joindate", "startdate", "startdateDate", "enddate", "schoolname",
                "address", "catalog2name", "levelText", "joinrangeText", "joinWayDesc",
-               "countdownText", "canJoin", "ableJoinFlag", "score")
+               "countdownText", "canJoin", "ableJoinFlag", "score",
+               # 报名状态：抽屉里的「已报名 / 取消报名」全靠这几个字段
+               "signUpId", "injoin", "cancel", "joinCanCancel", "joinWay", "joinStatus")
 
 
 def _slim(a: dict) -> dict:
@@ -152,6 +154,8 @@ class Hub:
         self._place_job = False
         self.token_job: dict | None = None
         self.enriching = False
+        self.mine_at = 0.0
+        self._mine_cache: list[dict] = []
 
         cfg = copy.deepcopy(base_cfg)
         api = dict(cfg.get("api") or {})
@@ -349,6 +353,8 @@ class Hub:
 
     def _after_signup(self, aid: str, msg: str) -> dict:
         """报名/取消之后：清缓存、重拉详情、就地更新、写日志。"""
+        self.mine_at = 0.0
+        self._mine_cache = []
         try:
             self.mon.cache.drop([aid])
             d = self.mon.client.detail(aid)
@@ -407,6 +413,55 @@ class Hub:
             raise ValueError(_friendly_signup_error(e.code, e.msg, item))
         return self._after_signup(aid, f"已取消报名「{self._name_of(aid)}」")
 
+    def _warm_mine(self) -> None:
+        try:
+            self.mine_items()
+        except Exception:  # noqa: BLE001
+            pass
+
+    def mine_items(self, ttl: float = 60.0) -> list[dict]:
+        """「我的活动」：我这个账号已经报名的活动。"""
+        now = time.time()
+        if self._mine_cache and now - self.mine_at < ttl:
+            return self._mine_cache
+        smap = {int(k): v for k, v in ((self.mon.status_map or {}) or {}).items()}
+        out: list[dict] = []
+        seen: set[str] = set()
+        for page in range(1, 4):
+            try:
+                d = self.mon.client.mine(page)
+            except ApiError as e:
+                if str(e.code) in ("10005", "10007"):
+                    self.log("我的活动：登录已失效")
+                else:
+                    self.log(f"我的活动抓取失败：[{e.code}] {e.msg}")
+                break
+            rows = (d or {}).get("list") or (d or {}).get("rows") or []
+            for r in rows:
+                aid = str(r.get("aid") or r.get("activityId") or "")
+                if not aid or aid in seen:
+                    continue
+                seen.add(aid)
+                try:
+                    raw = int(str(r.get("status") or "0"))
+                except Exception:
+                    raw = 0
+                st = smap.get(raw) or "open"
+                sid = r.get("signUpId") or r.get("signupId") or ""
+                out.append({
+                    "aid": aid,
+                    "name": str(r.get("name") or r.get("activityName") or ""),
+                    "state": st,
+                    "status_text": str(r.get("statusText") or ""),
+                    "time": str(r.get("activitytime") or r.get("activityStartTime") or ""),
+                    "category": str(r.get("catalog2name") or ""),
+                    "signup_id": "" if str(sid) in ("", "0", "None") else str(sid),
+                })
+            if not (d or {}).get("haveMore"):
+                break
+        self._mine_cache, self.mine_at = out, now
+        return out
+
     def _name_of(self, aid: str) -> str:
         for it in self.items:
             if it["aid"] == str(aid):
@@ -419,8 +474,18 @@ class Hub:
         for it in items:
             cnt[it["state"]] = cnt.get(it["state"], 0) + 1
         live = [it for it in items if it["state"] != "ended"]
+        # 只吃缓存，不在这里同步打接口（否则首页要等 3 页「我的活动」）
+        if self._mine_cache and time.time() - self.mine_at < 120:
+            mine_rows = {m["aid"]: m for m in self._mine_cache}
+        else:
+            mine_rows = {}
+            threading.Thread(target=self._warm_mine, daemon=True).start()
         for it in live:
             it["address"] = self.places.get(it["aid"], "") or it.get("place", "")
+            m = mine_rows.get(it["aid"])
+            if m:
+                it["joined_by_me"] = True
+                it["signup_id"] = m.get("signup_id", "")
         live.sort(key=lambda x: (0 if x["state"] in ("open", "full") else 1,
                                  x["sign_end"] or 0))
         return {
@@ -598,6 +663,16 @@ class Handler(SimpleHTTPRequestHandler):
                 self._json({"error": "用户不存在"}, 404)
                 return
             self._json(hub.state())
+            return
+
+        if u.path == "/api/mine":
+            if self._need_login():
+                return
+            hub = get_hub(uid)
+            if not hub:
+                self._json({"error": "用户不存在"}, 404)
+                return
+            self._json({"items": hub.mine_items(), "at": int(time.time())})
             return
 
         if u.path == "/api/profile":
