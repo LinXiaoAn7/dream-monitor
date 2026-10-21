@@ -1,0 +1,20 @@
+services:
+  dream:
+    build: .
+    image: dream-monitor:latest
+    container_name: dream-monitor
+    restart: always
+    ports:
+      - "8770:8770"
+    environment:
+      DM_CODE: "dm2026"       # 访问口令，改掉它
+      DM_AUTO: "1"
+      TZ: "Asia/Shanghai"
+    volumes:
+      - ./config.yaml:/app/config.yaml      # 存 token，容器重建不丢
+      - ./data:/app/data                    # SQLite 数据库
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8770/api/state').read()"]
+      interval: 60s
+      timeout: 10s
+      retries: 3

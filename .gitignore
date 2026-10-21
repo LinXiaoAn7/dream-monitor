@@ -1,0 +1,30 @@
+# ---- 运行时数据（含真实活动库，体积大）----
+data/
+*.db
+*.db-journal
+*.log
+
+# ---- 本地配置：含账号密码与令牌，绝不入库 ----
+config.yaml
+
+# ---- 逆向取证产物：APK、私有数据包、frida/cloudflared 二进制 ----
+tools/
+ref/
+dmdata.tgz
+*.apk
+*.tgz
+*.pem
+*.exe
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.tmp/
+
+# ---- 编辑器 / 系统 ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

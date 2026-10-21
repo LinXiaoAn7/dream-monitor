@@ -1,0 +1,16 @@
+# 仅复制运行所需文件，避免把手机 dump、工具和参考项目打进镜像
+data/*
+ref/*
+tools/*
+dist/*
+__pycache__/
+*.pyc
+*.log
+*.tgz
+*.apk
+*.xlsx
+*.png
+!ui/**/*.png
+.git
+.venv
+venv

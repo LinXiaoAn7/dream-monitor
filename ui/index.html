@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>到梦空间 · 活动看板</title>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<div class="app">
+
+  <header class="masthead">
+    <div class="brand">
+      <span class="brand-mark">到梦空间</span>
+      <span class="brand-sub">四川职业技术学院 · 活动看板</span>
+    </div>
+    <div class="mast-actions">
+      <span class="stamp" id="stamp">尚未同步</span>
+      <span class="signature" title="林小安">
+        <span class="seal">安</span>
+        <span class="sign-name">林小安</span>
+      </span>
+      <button class="btn btn--solid" id="refresh" type="button">刷新</button>
+    </div>
+  </header>
+
+  <section class="board" aria-label="统计">
+    <div class="metric metric--hot">
+      <span class="m-label">可报名</span>
+      <b class="m-num" id="m-open">0</b>
+      <span class="m-cap">名额未满且开放中</span>
+    </div>
+    <div class="metric">
+      <span class="m-label">即将开始</span>
+      <b class="m-num" id="m-soon">0</b>
+      <span class="m-cap">报名尚未开启</span>
+    </div>
+    <div class="metric">
+      <span class="m-label">进行中</span>
+      <b class="m-num" id="m-run">0</b>
+      <span class="m-cap">活动已开始</span>
+    </div>
+    <div class="metric metric--note">
+      <span class="m-label">说明</span>
+      <p class="m-text">仅显示可报名 / 即将开始 / 进行中的校内活动，已结束的不列出。数据来自 App 本校列表，点任意一条看完整详情。</p>
+    </div>
+
+    <div class="gauge">
+      <span class="gauge-title">状态分布</span>
+      <div class="gauge-bar" role="img" aria-label="状态分布">
+        <i class="gauge-seg gauge-seg--open" id="g-open"></i>
+        <i class="gauge-seg gauge-seg--soon" id="g-soon"></i>
+        <i class="gauge-seg gauge-seg--run" id="g-run"></i>
+      </div>
+      <ul class="gauge-legend">
+        <li><i class="dot dot--open"></i>可报名</li>
+        <li><i class="dot dot--soon"></i>即将开始</li>
+        <li><i class="dot dot--run"></i>进行中</li>
+      </ul>
+    </div>
+  </section>
+
+  <nav class="tabs" id="tabs">
+    <button class="tab is-on" data-f="all" type="button">全部<b id="c-all">0</b></button>
+    <button class="tab" data-f="open" type="button">可报名<b id="c-open">0</b></button>
+    <button class="tab" data-f="soon" type="button">即将开始<b id="c-soon">0</b></button>
+  </nav>
+
+  <main class="stream" id="stream">
+    <div class="empty" id="empty">加载中…</div>
+  </main>
+
+  <footer class="foot">
+    <button class="btn btn--ghost" id="token" type="button">刷新 token</button>
+    <span class="foot-token" id="token-tail">…</span>
+    <span class="foot-note" id="token-job"></span>
+  </footer>
+
+  <aside class="drawer" id="drawer" aria-hidden="true">
+    <div class="drawer-head">
+      <span class="drawer-kicker">活动详情</span>
+      <button class="icon-btn" id="drawer-close" type="button" aria-label="关闭">✕</button>
+    </div>
+    <h2 class="drawer-title" id="d-title">—</h2>
+    <div class="drawer-body" id="d-body"></div>
+  </aside>
+  <div class="scrim" id="scrim"></div>
+</div>
+<script src="/app.js"></script>
+</body>
+</html>
