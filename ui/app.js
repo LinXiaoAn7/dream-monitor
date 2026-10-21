@@ -70,12 +70,19 @@ function renderBoard() {
   $("c-open").textContent = s.open || 0;
   $("c-soon").textContent = s.soon || 0;
   $("stamp").textContent = stamp(S.last_sync);
-  $("token-tail").textContent = S.token ? `${S.token.slice(0, 8)}…` : "无 token";
   $("refresh").disabled = !!S.busy;
-  $("refresh").textContent = S.busy ? "抓取中…" : "刷新";
+  $("refresh").textContent = S.busy ? "抓取中…" : "刷新活动";
 
-  const job = S.token_job;
-  $("token-job").textContent = job ? (job.status === "running" ? job.msg : (job.msg || "")) : "";
+  const auth = S.auth || {};
+  const notice = $("notice");
+  if (auth.stale) {
+    notice.hidden = false;
+    $("notice-text").textContent =
+      `${auth.msg || "登录已失效"}。服务端是单点登录，重新登录会让手机端的到梦空间登录失效。`;
+    $("notice-act").disabled = false;
+  } else {
+    notice.hidden = true;
+  }
 }
 
 function passFilter(it) {
@@ -96,7 +103,7 @@ function renderList() {
   listSig = sig;
 
   if (!items.length) {
-    stream.innerHTML = `<div class="empty">${S.items.length ? "这个筛选下没有活动" : "还没有数据，点右上角刷新"}</div>`;
+    stream.innerHTML = `<div class="empty">${S.items.length ? "这个筛选下没有活动" : "还没有数据，点头像里的「刷新活动」"}</div>`;
     return;
   }
   stream.innerHTML = items.map((it, i) => {
@@ -190,22 +197,136 @@ function closeDetail() {
   $("scrim").classList.remove("is-on");
 }
 
+/* ---------------- 视图切换 ---------------- */
+let view = "board";
+
+function setView(name, push = true) {
+  view = name === "score" ? "score" : "board";
+  $("v-board").hidden = view !== "board";
+  $("v-score").hidden = view !== "score";
+  document.querySelectorAll(".rail-item").forEach((b) =>
+    b.classList.toggle("is-on", b.dataset.v === view));
+  if (push) {
+    const h = view === "score" ? "#score" : "#board";
+    if (location.hash !== h) history.replaceState(null, "", h);
+  }
+  if (view === "score") loadScore();
+}
+
+$("rail").addEventListener("click", (e) => {
+  const b = e.target.closest(".rail-item");
+  if (b) setView(b.dataset.v);
+});
+
+/* ---------------- 积分 ---------------- */
+let scTimer = null;
+
+function fmtTs(sec) {
+  if (!sec) return "";
+  const d = new Date(sec * 1000);
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}.${p(d.getMonth() + 1)}.${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function renderScore(p) {
+  const who = [p.name, p.college].filter(Boolean).join(" · ");
+  $("sc-who").textContent = who;
+  const s = p.score;
+  if (s) {
+    const v = Number(s.total);
+    $("sc-score").textContent = Number.isFinite(v) ? v.toFixed(2) : (s.text || "—");
+    $("sc-cap").textContent =
+      `数据来源：${s.source || p.score_source}` + (s.at ? ` · 读取于 ${fmtTs(s.at)}` : "");
+  } else {
+    $("sc-score").textContent = "…";
+    $("sc-cap").textContent = p.score_scanning ? "正在读取（约 30 秒）…" : "还没有数据，点「重新统计」";
+  }
+}
+
+async function loadScore() {
+  try {
+    const r = await fetch("/api/profile");
+    if (r.status === 401) { location.replace("/login.html"); return; }
+    const p = await r.json();
+    renderScore(p);
+    if (p.score_scanning) {
+      clearTimeout(scTimer);
+      scTimer = setTimeout(loadScore, 3000);
+    }
+  } catch (e) {
+    $("sc-cap").textContent = `读取失败：${e}`;
+  }
+}
+
+$("sc-logout").addEventListener("click", logout);
+$("sc-rescan").addEventListener("click", async () => {
+  $("sc-rescan").disabled = true;
+  await fetch("/api/score", { method: "POST" });
+  $("sc-cap").textContent = "正在读取（约 30 秒）…";
+  setTimeout(() => { $("sc-rescan").disabled = false; }, 2000);
+  loadScore();
+});
+
+async function logout() {
+  await fetch("/api/logout", { method: "POST" });
+  location.replace("/login.html");
+}
+
+/* ---------------- 抓取进度 ---------------- */
+function renderProgress(st) {
+  const p = st.progress || {};
+  const bar = $("pbar"), fill = $("pbar-fill"), txt = $("pbar-txt");
+  if (!st.busy || !p.phase) {
+    if (!bar.hidden) {
+      bar.hidden = true;
+      fill.style.transform = "scaleX(0)";
+    }
+    return;
+  }
+  bar.hidden = false;
+  const total = Number(p.total) || 0;
+  const done = Number(p.done) || 0;
+  const part = total ? Math.min(1, done / total) : 0;
+  const overall = p.phase === "pages" ? part * 0.5 : 0.5 + part * 0.5;
+  fill.style.transform = "scaleX(" + overall.toFixed(3) + ")";
+  txt.textContent = p.phase === "pages"
+    ? "抓取 " + done + " / " + total + " 页"
+    : "补详情 " + done + " / " + total + " 条";
+  bar.setAttribute("aria-valuenow", String(Math.round(overall * 100)));
+}
+
 /* ---------------- 数据 ---------------- */
 async function pull() {
   const r = await fetch("/api/state");
+  if (r.status === 401) { location.replace("/login.html"); return; }
   S = await r.json();
+  if (S.me) {
+    const who = S.me.name || S.me.account || "";
+    const school = S.me.school || "";
+    $("brand-sub").innerHTML =
+      `${school ? esc(school) + " · " : ""}活动看板 <b class="brand-by">by 林小安</b>`;
+    document.title = `${who || "到梦空间"} · 活动看板`;
+    setAvatar(S.me);
+  }
   renderBoard();
   renderList();
+  renderProgress(S);
 }
 
 async function refresh() {
+  toggleMenu(false);
   $("refresh").disabled = true;
   $("refresh").textContent = "抓取中…";
-  await fetch("/api/refresh", { method: "POST" });
-  for (let i = 0; i < 120; i++) {
-    await new Promise((r) => setTimeout(r, 1000));
-    await pull();
-    if (!S.busy && S.last_sync) break;
+  try {
+    await fetch("/api/refresh", { method: "POST" });
+    for (let i = 0; i < 120; i++) {
+      await new Promise((r) => setTimeout(r, 250));
+      await pull();
+      if (!S.busy && S.last_sync) break;
+    }
+  } finally {
+    $("refresh").disabled = false;
+    $("refresh").textContent = "刷新活动";
   }
 }
 
@@ -225,29 +346,83 @@ $("stream").addEventListener("click", (e) => {
 
 $("drawer-close").addEventListener("click", closeDetail);
 $("scrim").addEventListener("click", closeDetail);
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDetail(); });
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeDetail();
+});
 
 $("refresh").addEventListener("click", refresh);
 
-$("token").addEventListener("click", async () => {
-  $("token").disabled = true;
-  $("token-job").textContent = "正在换 token…";
-  await fetch("/api/token", { method: "POST" });
-  for (let i = 0; i < 30; i++) {
-    await new Promise((r) => setTimeout(r, 800));
-    await pull();
-    if (S.token_job && S.token_job.status !== "running") break;
-  }
-  $("token").disabled = false;
+function doRelogin() {
+  const acc = (S.me && S.me.account) || "";
+  const ok = window.confirm(
+    "登录已失效，需要重新登录。\n\n" +
+    "服务端是单点登录：重新登录后，手机端「到梦空间」上这个账号的登录会立刻失效，\n" +
+    "需要重新登录才能继续用手机 App。\n\n" +
+    "确定去登录页重新输入密码吗？"
+  );
+  if (!ok) return;
+  const q = new URLSearchParams({ reauth: "1" });
+  if (acc) q.set("account", acc);
+  location.assign(`/login.html?${q.toString()}`);
+}
+
+$("notice-act").addEventListener("click", doRelogin);
+
+/* ---------------- 头像菜单 ---------------- */
+function toggleMenu(on) {
+  const m = $("avatar-menu");
+  const open = on ?? m.hidden;
+  m.hidden = !open;
+  $("avatar-btn").setAttribute("aria-expanded", String(open));
+}
+
+$("avatar-btn").addEventListener("click", (e) => {
+  e.stopPropagation();
+  toggleMenu();
+});
+$("menu-logout").addEventListener("click", logout);
+document.addEventListener("click", (e) => {
+  if (!$("avatar-menu").hidden && !e.target.closest(".avatar-wrap")) toggleMenu(false);
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !$("avatar-menu").hidden) toggleMenu(false);
 });
 
+function setAvatar(me) {
+  const img = $("avatar-img");
+  const fb = $("avatar-fb");
+  const url = me && me.avatar;
+  fb.textContent = (me && me.name ? me.name[0] : "—");
+  if (!url) { img.hidden = true; fb.hidden = false; return; }
+  img.onload = () => { img.hidden = false; fb.hidden = true; };
+  img.onerror = () => { img.hidden = true; fb.hidden = false; };
+  img.src = url;
+}
+
 pull();
+setView(location.hash === "#score" ? "score" : "board", false);
 
 // 支持 #aid=xxx 直接打开详情
 window.addEventListener("hashchange", () => {
+  if (location.hash === "#score" || location.hash === "#board") {
+    setView(location.hash.slice(1), false);
+    return;
+  }
   const m = location.hash.match(/^#aid=(.+)$/);
   if (m) openDetail(m[1]);
 });
 if (/^#aid=/.test(location.hash)) openDetail(location.hash.slice(5));
 
-setInterval(pull, 15000);   // 只同步界面状态，不触发抓取
+/* 平时 15 秒同步一次；后端还在补详情（enriching）时改成 0.9 秒，
+   这样名额/地点是一格一格填上来的，不用干等。 */
+let pollTimer = null;
+function schedulePoll() {
+  const hasData = !!(S.items && S.items.length);
+  const wait = S.busy ? 400 : (S.enriching ? 900 : (hasData ? 15000 : 800));
+  clearTimeout(pollTimer);
+  pollTimer = setTimeout(async () => {
+    await pull();
+    schedulePoll();
+  }, wait);
+}
+schedulePoll();

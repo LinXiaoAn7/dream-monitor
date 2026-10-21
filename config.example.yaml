@@ -1,93 +1,77 @@
-# ============ 到梦空间活动监控配置 ============
-# 所有中文注释都可直接改；改完重启程序生效。
-
-# ---- 接口凭据 ----
-# 两种填法，二选一：
-#   ① 只填 account + password，跑 `python cli.py login` 自动登录换 uid/token（推荐）
-#   ② 直接填 uid + token（自己抓包或别处拿到的）
 api:
   host: https://appdmkj.5idream.net
-  account: ""                # 到梦空间登录手机号
-  password: ""               # 登录密码（明文存本地文件，注意机器安全）
-  uid: ""
-  token: ""
-  jPushId: ""
-  version: "4.9.5"
+  account: ''
+  password: ''
+  uid: ''
+  token: ''
+  jPushId: ''
+  version: 4.9.5
   timeout: 20
-  request_delay: 1.2       # 每次请求最小间隔(秒)，别调太低，会被风控
-
-# ---- 抓取行为 ----
-poll_interval: 30          # 轮询间隔(秒)。想"抢"就 15~20，稳妥 60
+  request_delay: 1.2
+  auto_relogin: false
+poll_interval: 30
 page_size: 20
-max_pages: 10              # 最多翻几页（10 页 × 20 条 = 200 条）
-notify_on_first_run: false # 首次运行是否把已存在的活动也推一遍（建议 false）
-dump_raw: false            # 置 true 会把原始响应存到 data/raw_pageN.json
-
-# ---- 筛选规则（不写 = 全部活动都通知）----
+# 并发抓取：页并发 / 详情并发。数字越大越快，但请求越密，风控概率上升
+page_workers: 4
+detail_workers: 4
+# 详情跨用户共享缓存（同一学校的人共用一份），单位秒
+detail_cache_path: data/shared_details.db
+detail_ttl: 900
+max_pages: 10
+notify_on_first_run: false
+dump_raw: false
 rules:
-  states: [open, full, soon]   # 只关心这些状态：open 报名中 / full 已满 / soon 未开始
-  require_quota: true          # 只推还有名额的
-  include: []                  # 名称/类别/主办方 含任一即命中，例: ["讲座", "志愿", "创新创业"]
-  exclude: []                  # 命中即排除，例: ["已结束", "测试"]
-  categories: []               # 类别过滤，例: ["思想成长", "实践实习"]
-  organizers: []               # 主办方过滤，例: ["校团委", "计算机学院"]
-  min_hours_left: 1            # 距报名截止不足 N 小时的忽略（0 = 不过滤）
-
-# ---- 通知渠道：enabled 置 true 才生效，可多选 ----
+  states:
+  - open
+  - full
+  - soon
+  require_quota: true
+  include: []
+  exclude: []
+  categories: []
+  organizers: []
+  min_hours_left: 1
 notify:
   console:
     enabled: true
-    beep: true                 # Windows 响铃提示
-
-  serverchan:                  # Server 酱 Turbo，微信接收，最省事
+    beep: true
+  serverchan:
     enabled: false
-    key: "SCTxxxxxxxxxxxxxxxx"
-
-  bark:                        # iOS Bark
+    key: SCTxxxxxxxxxxxxxxxx
+  bark:
     enabled: false
-    key: "your-bark-key"
+    key: your-bark-key
     server: https://api.day.app
     level: timeSensitive
     sound: bell
-
-  dingtalk:                    # 钉钉群机器人
+  dingtalk:
     enabled: false
-    webhook: "https://oapi.dingtalk.com/robot/send?access_token=xxx"
-
-  wecom:                       # 企业微信群机器人
+    webhook: https://oapi.dingtalk.com/robot/send?access_token=xxx
+  wecom:
     enabled: false
-    webhook: "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx"
-
+    webhook: https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx
   telegram:
     enabled: false
-    bot_token: "123456:ABC-DEF"
-    chat_id: "123456789"
-
+    bot_token: 123456:ABC-DEF
+    chat_id: '123456789'
   email:
     enabled: false
     smtp_host: smtp.qq.com
     smtp_port: 465
     ssl: true
-    user: "you@qq.com"
-    password: "授权码不是登录密码"
-    to: ["you@qq.com"]
-
-  webhook:                     # 任意自建服务 / n8n
+    user: you@qq.com
+    password: 授权码不是登录密码
+    to:
+    - you@qq.com
+  webhook:
     enabled: false
-    url: "http://127.0.0.1:8080/dm-hook"
-
-# ---- 自动报名（危险：会真的替你报名，默认关闭）----
+    url: http://127.0.0.1:8080/dm-hook
 auto_signup:
   enabled: false
-  only_ids: []                 # 只对指定活动ID自动报名，留空则按 rules.include 命中即报
-  min_interval: 120            # 两次自动报名最小间隔(秒)
-  remark: ""                   # 报名备注
-
-# ---- 其它 ----
+  only_ids: []
+  min_interval: 120
+  remark: ''
 db: data/dm.db
-
-# ---- 状态码映射（不确定时先跑 `python cli.py probe` 看 status_raw 实际值）----
-# 3 = 报名中（已知）。其余留默认，观察后可微调。
 status_map:
   1: soon
   2: soon

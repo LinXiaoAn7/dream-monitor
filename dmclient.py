@@ -36,6 +36,7 @@ PATH_SIGNUP_DETAIL = "/v2/signup/detail"
 PATH_MINE_LIST = "/v2/activity/mime/list"
 PATH_SIGNUP_CANCEL = "/v2/signup/cancel"
 PATH_SCORE = "/v3/user/account/summary"
+PATH_MINE_HOMEPAGE = "/v3/user/mine_homepage"
 
 # 密码加密用的 DES 密钥（客户端硬编码）
 DES_KEY = "51434574"
@@ -74,6 +75,37 @@ class ApiError(Exception):
 
 class AuthExpired(ApiError):
     pass
+
+
+DEVICE_PRESETS = [
+    {"channelName": "yingyongbao", "device": "V2301A", "hardware": "qcom/sm8475",
+     "screen": "1260*2800", "sysVersion": "15"},
+    {"channelName": "appstore", "device": "PGT-AN10", "hardware": "qcom/sm8550",
+     "screen": "1176*2500", "sysVersion": "14"},
+    {"channelName": "huawei", "device": "ALN-AL00", "hardware": "qcom/sm8475",
+     "screen": "1216*2688", "sysVersion": "15"},
+    {"channelName": "oppo", "device": "PJD110", "hardware": "qcom/sm8650",
+     "screen": "1264*2780", "sysVersion": "15"},
+]
+
+
+def new_identity(cfg: dict, preset: int | None = None) -> dict:
+    """生成一套全新的设备指纹并写进 cfg（uuid / jPushId / device）。
+
+    为什么需要：到梦空间的风控是按**设备指纹**记的。被标记后，同一个
+    standardUA 会一直拿到 10005（哪怕刚登录成功），换一套指纹立刻恢复。
+    """
+    import random
+    dev = dict(DEVICE_PRESETS[(preset if preset is not None
+                               else random.randrange(len(DEVICE_PRESETS)))])
+    now = str(int(__import__("time").time() * 1000))
+    dev.setdefault("createTime", now)
+    dev.setdefault("startTime", now)
+    dev["operator"] = "wifi"
+    cfg["device"] = dev
+    cfg["uuid"] = uuid.uuid4().hex
+    cfg["jPushId"] = "%012x%s" % (uuid.uuid4().int & 0xFFFFFFFFFFFF, uuid.uuid4().hex[:8])
+    return cfg
 
 
 def _ua_json(cfg: dict) -> str:
@@ -245,15 +277,92 @@ class DreamClient:
         out = data.get("data") or {}
         self.uid = str(out.get("uid", ""))
         self.token = str(out.get("token", ""))
+        self.profile = out
         return {
             "uid": self.uid,
             "token": self.token,
             "name": out.get("displayName") or out.get("name", ""),
             "school": out.get("schoolName", ""),
             "college": out.get("collegeName", ""),
+            "student_id": str(out.get("studentId", "")),
+            "phone": str(out.get("phone", "")),
+            "avatar": str(out.get("avatar", "")),
+            "profile": out,
+        }
+
+    # ---------------------------------------------------------- 积分
+    def mine_homepage(self) -> dict:
+        """「我的」页数据（App 同款接口）。
+
+        - 路径 /v3/user/mine_homepage 是从 App 进程内存里挖出来的（加固壳把 dex 加密，
+          静态分析看不到）；必须带 page 参数，少一个就是 11002。
+        - accountList 里 accountTypeSchoolName == "积分" 的那项，
+          accountMoney 就是 App 上显示的积分（如 "43.00"）。
+        """
+        d = self._post(PATH_MINE_HOMEPAGE, {"page": "1"}) or {}
+        return d if isinstance(d, dict) else {}
+
+    def points(self) -> dict:
+        """只取积分（个人主页展示用）。"""
+        data = self.mine_homepage()
+        accounts = data.get("accountList") or []
+        picked = None
+        for it in accounts:
+            if str(it.get("accountTypeSchoolName") or "") == "积分":
+                picked = it
+                break
+        if picked is None:
+            for it in accounts:
+                if str(it.get("accountTypeName") or "") in ("积分", "学分"):
+                    picked = it
+                    break
+        if picked is None and accounts:
+            picked = accounts[0]
+        raw = str((picked or {}).get("accountMoney") or "")
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            value = None
+        return {
+            "value": value,
+            "text": raw,
+            "label": str((picked or {}).get("accountTypeSchoolName") or "积分"),
+            "cardName": str(data.get("cardName") or ""),
+            "schoolRank": str(data.get("schoolRank") or ""),
+            "practiceNumber": str(data.get("practiceNumber") or ""),
+            "raw": data,
+        }
+
+    def mine(self, page: int = 1) -> dict:
+        """我参与的活动（服务端要 keyword/page/type 三件套，且不能带 timestamp）。"""
+        d = self._post("/v2/activity/mine/list",
+                       extra={"page": str(page), "keyword": "", "type": "1"}, ts=False) or {}
+        return d if isinstance(d, dict) else {}
+
+    def scan_score(self, max_pages: int = 6) -> dict:
+        """积分：直接问 App 同款接口，不再逐条累加。
+
+        早期以为没有「总积分」接口，只能把「我的活动」里每条详情的 score 加起来，
+        得出的 24.9 跟 App 上显示的 43.00 对不上 —— 口径是错的。真实值在
+        /v3/user/mine_homepage 的 accountList[积分].accountMoney。
+        """
+        p = self.points()
+        return {
+            "total": p["value"] if p["value"] is not None else 0.0,
+            "text": p["text"],
+            "label": p["label"],
+            "cardName": p["cardName"],
+            "schoolRank": p["schoolRank"],
+            "practiceNumber": p["practiceNumber"],
+            "source": "到梦空间「我的」页",
         }
 
     # ---------------------------------------------------------- 业务
+    def summary(self) -> dict:
+        """账号概览（个人信息页用）：姓名、学校、学院、积分等。"""
+        data = self._post("/v3/user/account/summary") or {}
+        return data if isinstance(data, dict) else {}
+
     ACTIVITY_QUERY = {
         "catalogId": "", "catalogId2": "", "endTime": "", "joinEndTime": "",
         "joinFlag": "", "joinStartTime": "", "keyword": "", "level": "",
@@ -261,10 +370,16 @@ class DreamClient:
     }
 
     def activities(self, page: int = 1, page_size: int | None = None, **kw) -> Any:
-        """活动列表。服务端只认固定这套字段，多传一个未知键就是 11002。"""
-        extra = dict(self.ACTIVITY_QUERY)
-        extra["page"] = str(page)
-        extra.update(kw)
+        """活动列表。
+
+        服务端现在只认 `page`（外加调用方显式传的关键字）；把老的 12 键
+        ACTIVITY_QUERY 整套塞进去会返回 11002 —— 那套字段是 2023 年的老版本
+        留下的，接口后来又收紧过。
+        """
+        extra = {"page": str(page)}
+        for k, v in kw.items():
+            if v is not None:
+                extra[k] = v
         return self._post(PATH_ACTIVITIES, extra)
 
     def detail(self, activity_id: str) -> Any:
@@ -278,6 +393,16 @@ class DreamClient:
         return self._post(PATH_SIGNUP_SUBMIT, {
             "activityId": str(activity_id), "data": data, "remark": remark,
         })
+
+    def rotate_identity(self) -> dict:
+        """换一套设备指纹（风控被标记时用），并重建 standardUA。"""
+        new_identity(self.cfg)
+        self.ua = _ua_json(self.cfg)
+        self.sess.headers.update({"standardUA": self.ua})
+        log.warning("已切换设备指纹：uuid=%s… device=%s",
+                    str(self.cfg.get("uuid"))[:8], self.cfg["device"]["device"])
+        return {"uuid": self.cfg["uuid"], "jPushId": self.cfg["jPushId"],
+                "device": self.cfg["device"]}
 
     def ping(self) -> tuple[bool, str]:
         """验证凭据是否有效。"""

@@ -68,6 +68,27 @@ class Store:
                 (name, state, quota, payload, now, now, aid))
         self.db.commit()
 
+    def snapshot(self) -> dict[str, tuple[str, int]]:
+        """一次查出全部活动的 (state, quota)，避免逐条 SELECT。"""
+        return {r["aid"]: (r["state"], r["quota"])
+                for r in self.db.execute("SELECT aid,state,quota FROM activities")}
+
+    def upsert_many(self, rows) -> None:
+        """批量写（rows = [(aid,name,state,quota,raw)]），只 commit 一次。"""
+        if not rows:
+            return
+        now = time.time()
+        payloads = [(r[0], r[1], r[2], r[3], json.dumps(r[4], ensure_ascii=False), now)
+                    for r in rows]
+        self.db.executemany(
+            "INSERT INTO activities(aid,name,state,quota,raw,first_seen,last_seen,updated)"
+            " VALUES(?,?,?,?,?,?,?,?)"
+            " ON CONFLICT(aid) DO UPDATE SET name=excluded.name, state=excluded.state,"
+            " quota=excluded.quota, raw=excluded.raw, last_seen=excluded.last_seen,"
+            " updated=excluded.updated",
+            [p0 + (p0[5], p0[5]) for p0 in payloads])
+        self.db.commit()
+
     def all_ids(self) -> set[str]:
         return {r["aid"] for r in self.db.execute("SELECT aid FROM activities")}
 

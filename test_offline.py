@@ -29,7 +29,9 @@ class FakeClient:
 
     def activities(self, page=1, page_size=20, **kw):
         self.calls = page
-        return {"code": "100", "data": {"list": self.pages.get(page, [])}}
+        items = self.pages.get(page, [])
+        more = bool(self.pages) and page < max(self.pages)
+        return {"code": "100", "data": {"list": items, "haveMore": more}}
 
 
 def build(pages):
@@ -42,6 +44,12 @@ def build(pages):
         "poll_interval": 1, "page_size": 2, "max_pages": 3,
         "notify_on_first_run": False,
     }
+    cfg["page_workers"] = 1          # 离线仿真不并发
+    cfg["detail_workers"] = 1
+    cfg["enrich_detail"] = False     # 假数据没有详情接口
+    from detail_cache import DetailCache
+    cfg["detail_cache"] = DetailCache(
+        os.path.join("data", f"tc_{int(time.time()*1000)%100000}.db"), 60)
     m = M.Monitor(cfg)
     m.client = FakeClient(pages)
     return m

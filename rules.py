@@ -127,6 +127,7 @@ def normalize(a: dict, status_map: dict | None = None) -> dict:
                               "activityTypeName", "classifyName", default="") or ""),
         "organizer": str(_pick(a, "schoolname", "createUnitName", "organizer", "unitName",
                                "publishUnitName", "departmentName", default="") or ""),
+        "place": str(_pick(a, "address", "place", "location", "venue", default="") or ""),
         "credit": str(_pick(a, "credit", "score", "creditScore", "integral", default="") or ""),
         "sign_start": sign_start,
         "sign_end": sign_end,
