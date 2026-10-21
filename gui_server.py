@@ -365,6 +365,21 @@ class Handler(SimpleHTTPRequestHandler):
     def log_message(self, fmt, *args):
         return
 
+    def end_headers(self):  # noqa: N802
+        """HTML 一律不缓存，静态资源按版本号长缓存。
+
+        SimpleHTTPRequestHandler 不带 cache-control，浏览器会按
+        Last-Modified 做启发式缓存；登录后跳转 "/" 可能命中缓存里的
+        login.html，看起来就像“登录了但没跳转”。
+        """
+        if not getattr(self, "_cache_done", False):
+            path = urlparse(self.path).path.lower()
+            if path.endswith((".html", "/")) or path == "":
+                self.send_header("cache-control", "no-store")
+            else:
+                self.send_header("cache-control", "public, max-age=604800")
+        super().end_headers()
+
     # ---------------------------------------------------------------- 工具
     def _json(self, obj, code: int = 200, cookie: str | None = None) -> None:
         body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
@@ -372,6 +387,7 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header("content-type", "application/json; charset=utf-8")
         self.send_header("content-length", str(len(body)))
         self.send_header("cache-control", "no-store")
+        self._cache_done = True
         if cookie:
             self.send_header("set-cookie", cookie)
         self.end_headers()
