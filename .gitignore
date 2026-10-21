@@ -16,12 +16,18 @@ dmdata.tgz
 *.pem
 *.exe
 
+# ---- 第三方字体：不入库，按需放到 ui/fonts/ ----
+ui/fonts/
+
 # ---- Python ----
 __pycache__/
 *.py[cod]
 .venv/
 venv/
 .tmp/
+
+# ---- 临时脚本 ----
+_patch_*.py
 
 # ---- 编辑器 / 系统 ----
 .vscode/
