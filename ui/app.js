@@ -100,7 +100,7 @@ let listSig = "";
 function renderList() {
   const stream = $("stream");
   const items = (S.items || []).filter(passFilter);
-  const sig = filter + "|" + items.map((i) => `${i.aid}:${i.state}:${i.quota}:${i.address || ""}`).join(",");
+  const sig = filter + "|" + items.map((i) => `${i.aid}:${i.state}:${i.quota}:${i.joined_by_me ? 1 : 0}:${i.address || ""}`).join(",");
   if (sig === listSig) return;          // 数据没变就不重绘，避免动画重放
   const first = listSig === "";
   listSig = sig;
@@ -122,6 +122,7 @@ function renderList() {
           <h3 class="row-title">${esc(it.name || "（无标题）")}</h3>
           <div class="row-meta">
             <span class="tag ${tagCls}">${STATE_LABEL[it.state] || it.state}</span>
+            ${it.joined_by_me ? '<span class="tag tag--mine">已报名</span>' : ""}
             ${it.category ? `<span>${esc(it.category)}</span>` : ""}
             ${it.organizer ? `<span>${esc(it.organizer)}</span>` : ""}
           </div>
@@ -187,6 +188,8 @@ async function openDetail(aid) {
   const startTxt = d.startdateDate ? fmtDate(d.startdateDate) : fmtDate(d.startdate);
   const endTxt = /^\d{10,13}$/.test(String(d.enddate || "")) ? fmtDate(d.enddate) : (d.enddate || "—");
   const way = String(d.joinWayDesc || "").replace(/^报名制[:：]\s*/, "");
+  // 审核制：待审核的人也占名额，剩余可能偏乐观
+  const isReview = /审核/.test(String(d.joinWayDesc || "")) || String(d.joinWay || "2") !== "2";
 
   const rows = [
     ["状态", d.statusText || STATE_LABEL[d.state] || "—"],
@@ -198,9 +201,109 @@ async function openDetail(aid) {
     ["类别", d.catalog2name || "—"],
     ["级别", d.levelText || "—"],
   ];
+  // 报名状态：详情里的 canJoin / cancel / signUpId 说了算
+  const sid = String(d.signUpId ?? "0");
+  const mine = Boolean(d.injoin) || !["", "0", "None", "null", "undefined"].includes(sid);
+  const canJoin = Boolean(d.canJoin) && !mine;
+  const canCancel = Boolean(d.cancel || d.joinCanCancel) && mine;
+
+  let action = "";
+  if (mine) {
+    action = `<div class="d-actions">
+      <button class="btn btn--ghost" id="d-cancel" type="button" ${canCancel ? "" : "disabled"}>取消报名</button>
+      <span class="d-hint">${canCancel ? "已报名，可以取消" : "已报名，当前不可取消"}</span>
+    </div>`;
+  } else if (canJoin) {
+    action = `<div class="d-actions">
+      <button class="btn btn--solid" id="d-join" type="button">立即报名</button>
+      <span class="d-hint">报名成功后会出现在「我的活动」里</span>
+    </div>`;
+  } else {
+    const why = d.state === "soon" ? "报名还没开始"
+      : (d.state === "full" ? "名额已满"
+      : (d.state === "ended" || d.state === "running" ? "报名已结束" : "当前不可报名"));
+    action = `<div class="d-actions"><span class="d-hint">${why}</span></div>`;
+  }
+
   $("d-body").innerHTML = rows.map(([k, v]) =>
     `<span class="dk">${k}</span><span class="dv">${esc(v || "—")}</span>`).join("")
-    + (way ? `<div class="drawer-note"><b>报名制</b>　${esc(way)}</div>` : "");
+    + (way ? `<div class="drawer-note"><b>报名制</b>　${esc(way)}</div>` : "")
+    + (isReview ? `<div class="drawer-note"><b>审核制</b>　待审核的人也占名额，这里显示的剩余可能偏乐观，最终以 App 为准。</div>` : "")
+    + action;
+
+  const jb = $("d-join");
+  if (jb) jb.addEventListener("click", () => doSignup(aid));
+  const cb = $("d-cancel");
+  if (cb) cb.addEventListener("click", () => doCancel(aid));
+}
+
+/* 轻提示 */
+let toastTimer = null;
+function toast(msg) {
+  const el = $("toast");
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.add("is-on");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("is-on"), 2600);
+}
+
+/* 报名 / 取消报名 */
+async function doSignup(aid) {
+  const name = (S.items.find((i) => i.aid === aid) || {}).name || "这条活动";
+  const ok = await ask({
+    title: "报名参加？",
+    text: `将用你的到梦空间账号报名「${name}」。报名成功后可在同一个地方取消。`,
+    ok: "确认报名",
+  });
+  if (!ok) return;
+  const btn = $("d-join");
+  if (btn) { btn.disabled = true; btn.textContent = "提交中…"; }
+  try {
+    const r = await fetch("/api/signup", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ aid }),
+    });
+    const j = await r.json();
+    if (!r.ok || j.ok === false) throw new Error(j.error || ("HTTP " + r.status));
+    await afterSignupChange(aid, j.msg || "报名成功");
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = "立即报名"; }
+    await ask({ title: "报名没成功", text: String(e.message || e), ok: "知道了" });
+  }
+}
+
+async function doCancel(aid) {
+  const name = (S.items.find((i) => i.aid === aid) || {}).name || "这条活动";
+  const ok = await ask({
+    title: "取消报名？",
+    text: `将从「${name}」中退出报名。部分学校对取消次数有限制。`,
+    ok: "取消报名",
+  });
+  if (!ok) return;
+  const btn = $("d-cancel");
+  if (btn) { btn.disabled = true; btn.textContent = "处理中…"; }
+  try {
+    const r = await fetch("/api/cancel", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ aid }),
+    });
+    const j = await r.json();
+    if (!r.ok || j.ok === false) throw new Error(j.error || ("HTTP " + r.status));
+    await afterSignupChange(aid, j.msg || "已取消报名");
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = "取消报名"; }
+    await ask({ title: "取消失败", text: String(e.message || e), ok: "知道了" });
+  }
+}
+
+async function afterSignupChange(aid, msg) {
+  detailCache.delete(aid);
+  await pull();                 // 列表里的「已报名」标记
+  await openDetail(aid);        // 抽屉里的按钮状态
+  toast(msg);
 }
 
 function closeDetail() {

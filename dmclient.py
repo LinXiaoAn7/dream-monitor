@@ -108,26 +108,61 @@ def new_identity(cfg: dict, preset: int | None = None) -> dict:
     return cfg
 
 
+IDENTITY_PATH = "data/identity.json"
+
+
+def _ensure_identity(cfg: dict) -> dict:
+    """保证 uuid / jPushId / version 齐全且跨重启稳定。
+
+    实测：submit 报 -2000 的真因就是 UA 与参数里的 jPushId 不一致、
+    或者 UA 缺 jPushId/uuid。身份一旦生成就落盘复用，别每次换。
+    """
+    try:
+        import pathlib as _p
+        f = _p.Path(IDENTITY_PATH)
+        if f.exists():
+            saved = json.loads(f.read_text(encoding="utf-8"))
+        else:
+            saved = {}
+    except Exception:
+        saved = {}
+    if not cfg.get("uuid"):
+        cfg["uuid"] = saved.get("uuid") or uuid.uuid4().hex
+    if not cfg.get("jPushId"):
+        cfg["jPushId"] = saved.get("jPushId") or ("%013x" % (int(time.time() * 1000) % (16 ** 13)))
+    cfg.setdefault("version", "5.0.0")
+    try:
+        import pathlib as _p2
+        f2 = _p2.Path(IDENTITY_PATH)
+        f2.parent.mkdir(parents=True, exist_ok=True)
+        f2.write_text(json.dumps({"uuid": cfg["uuid"], "jPushId": cfg["jPushId"]}),
+                      encoding="utf-8")
+    except Exception:
+        pass
+    return cfg
+
+
 def _ua_json(cfg: dict) -> str:
-    """构造 standardUA 设备指纹。缺字段用稳定默认值，保证同一设备复用。"""
+    """构造 standardUA 设备指纹（字段对齐 App 5.0.0 实际发的那个）。"""
     dev = cfg.get("device", {})
+    now = int(time.time() * 1000)
     profile = {
-        "channelName": dev.get("channelName", "appstore"),
-        "createTime": str(dev.get("createTime", "1750000000000")),
-        "device": dev.get("device", "Redmi Note 5"),
-        "hardware": dev.get("hardware", "xiaomi/sdm660"),
-        "imei": "",
+        "channelName": dev.get("channelName", "dmkj_Android"),
+        "countryCode": dev.get("countryCode", "CN"),
+        "createTime": int(dev.get("createTime", now - 86400000)),
+        "device": dev.get("device", "OnePlus PJE110"),
+        "hardware": dev.get("hardware", "qcom"),
         "jPushId": cfg.get("jPushId", ""),
-        "mac": "",
+        "modifyTime": int(dev.get("modifyTime", now - 3600000)),
         "operator": dev.get("operator", "wifi"),
-        "packageName": "com.jingcai.apps.qualitydev",
-        "screen": dev.get("screen", "1080*2160"),
-        "startTime": str(dev.get("startTime", "1750000000000")),
-        "sysVersion": dev.get("sysVersion", "11"),
+        "screenResolution": dev.get("screenResolution", "1264-2584"),
+        "startTime": int(dev.get("startTime", now - 600000)),
+        "sysVersion": dev.get("sysVersion", "Android 15 35"),
+        "system": "android",
         "uuid": cfg.get("uuid") or uuid.uuid4().hex,
-        "version": cfg.get("version", "4.9.5"),
+        "version": cfg.get("version", "5.0.0"),
     }
-    return json.dumps(profile, ensure_ascii=False, separators=(",", ":"))
+    return json.dumps(profile, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
 
 
 class DreamClient:
@@ -136,7 +171,8 @@ class DreamClient:
         self.host = cfg.get("host", HOST)
         self.uid = str(cfg.get("uid", ""))
         self.token = str(cfg.get("token", ""))
-        self.version = cfg.get("version", "4.9.5")
+        _ensure_identity(cfg)
+        self.version = cfg.get("version", "5.0.0")
         self.jpush = cfg.get("jPushId", "")
         self.timeout = cfg.get("timeout", 20)
         self.delay = cfg.get("request_delay", 1.0)
@@ -168,8 +204,8 @@ class DreamClient:
                 "token": self.token,
                 "version": self.version,
             })
-            if self.jpush:
-                params["jPushId"] = self.jpush
+            # jPushId 只在 submit 里显式传：多数接口的白名单里没有它，
+            # 多塞一个就 11002。
         if extra:
             params.update({k: v for k, v in extra.items() if v is not None})
         if ts:
@@ -387,12 +423,35 @@ class DreamClient:
         return self._post(PATH_DETAIL, {"activityId": str(activity_id)}, ts=False)
 
     def signup_info(self, activity_id: str) -> Any:
-        return self._post(PATH_SIGNUP_INFO, {"activityId": str(activity_id)})
+        """报名前置信息（joinTip / joinMaxNum / 是否需要验证码）。
 
-    def submit(self, activity_id: str, data: str = "", remark: str = "") -> Any:
+        坑：这个接口**不能**带 timestamp，带了就是 11002；和 detail 一样。
+        """
+        return self._post(PATH_SIGNUP_INFO, {"activityId": str(activity_id)}, ts=False)
+
+    def signup_form(self, activity_id: str) -> Any:
+        """报名前拉表单（字段模板）。和 signup_info 是同一个接口。"""
+        return self.signup_info(activity_id)
+
+    def submit(self, activity_id: str, data: str = "[]", remark: str = "") -> Any:
+        """提交报名。data 是报名表单的 JSON 字符串（不是对象）。
+
+        实测（App 5.0.0 内存抓的真参数）：
+        activityId / data / jPushId / remark / useNumber / uid / token / version / timestamp
+        —— 少 jPushId 或 useNumber 就是 -2000，jPushId 还必须与本机 standardUA 里的一致。
+        """
         return self._post(PATH_SIGNUP_SUBMIT, {
-            "activityId": str(activity_id), "data": data, "remark": remark,
+            "activityId": str(activity_id),
+            "data": data,
+            "remark": remark,
+            "useNumber": "0",
+            "jPushId": self.jpush,
         })
+
+    def cancel(self, signup_id: str) -> Any:
+        """取消报名。要的是 signUpId（详情里的 signUpId 字段），不是 activityId。"""
+        # 实测：取消报名同样不能带 timestamp，带了就是 11002
+        return self._post(PATH_SIGNUP_CANCEL, {"signUpId": str(signup_id)}, ts=False)
 
     def rotate_identity(self) -> dict:
         """换一套设备指纹（风控被标记时用），并重建 standardUA。"""

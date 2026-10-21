@@ -134,6 +134,12 @@ def normalize(a: dict, status_map: dict | None = None) -> dict:
         "organizer": str(_pick(a, "schoolname", "createUnitName", "organizer", "unitName",
                                "publishUnitName", "departmentName", default="") or ""),
         "place": str(_pick(a, "address", "place", "location", "venue", default="") or ""),
+        # 报名状态（来自详情接口；列表项没有这些字段时为 None）
+        "can_join": bool(_pick(a, "canJoin", default=False)),
+        "can_cancel": bool(_pick(a, "cancel", "joinCanCancel", default=False)),
+        "signup_id": str(_pick(a, "signUpId", default="") or ""),
+        "joined_by_me": bool(_pick(a, "injoin", default=False))
+                        or str(_pick(a, "signUpId", default="0")) not in ("", "0", "None"),
         "credit": str(_pick(a, "credit", "score", "creditScore", "integral", default="") or ""),
         "sign_start": sign_start,
         "sign_end": sign_end,

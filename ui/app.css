@@ -680,6 +680,53 @@ body {
   margin-top: var(--s4);
 }
 
+/* ============================ 报名 ============================ */
+.tag--mine {
+  color: var(--signal);
+  border-color: var(--signal);
+}
+
+.d-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s3);
+  margin-top: var(--s5);
+  padding-top: var(--s4);
+  border-top: 1px solid var(--border-hair);
+}
+
+.d-actions:first-of-type { margin-top: var(--s4); }
+
+.d-hint {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-mute);
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: var(--s6);
+  z-index: 40;
+  padding: var(--s2) var(--s4);
+  font-size: 12px;
+  color: var(--signal-ink);
+  background: var(--surface-raised);
+  border-left: 2px solid var(--signal);
+  opacity: 0;
+  transform: translate(-50%, 6px);
+  pointer-events: none;
+  transition: opacity var(--dur-micro) var(--ease-out),
+              transform var(--dur-micro) var(--ease-out);
+}
+
+.toast.is-on {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
 /* ============================ 确认弹窗 ============================ */
 .confirm {
   width: min(380px, calc(100vw - var(--s6)));

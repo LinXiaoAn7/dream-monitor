@@ -37,7 +37,7 @@ sys.path.insert(0, str(ROOT))
 
 import yaml  # noqa: E402
 
-from dmclient import DreamClient  # noqa: E402
+from dmclient import DreamClient, ApiError  # noqa: E402
 from monitor import Monitor  # noqa: E402
 from users import Users  # noqa: E402
 
@@ -59,6 +59,72 @@ def _slim(a: dict) -> dict:
     out["aid"] = str(out["aid"] or "")
     out.pop("raw", None)
     return out
+
+
+SIGNUP_MSG = {
+    "2000011": "你已经报过这个活动了",
+    "2000166": "名额已经满了（报名人数达到上限）",
+    "2000000": "活动不存在或已下架",
+    "11111": "报名表单还有必填项没填",
+    "11002": "接口参数没被服务端接受",
+    "-2000": "服务端处理报名时出错（多半是报名表单不合规或触发了风控）",
+    "10005": "登录已失效，请重新登录",
+    "10007": "登录已失效，请重新登录",
+}
+
+
+def _friendly_signup_error(code: str, msg: str, item: dict | None) -> str:
+    """把接口错误码翻成用户能看懂的原因，尽量带上活动当前状态。"""
+    base = SIGNUP_MSG.get(str(code)) or msg or f"未知错误（{code}）"
+    if item:
+        st = item.get("state")
+        quota = item.get("quota")
+        if st == "full" or quota == 0:
+            return "这个活动名额已经满了"
+        if st == "soon":
+            return "这个活动还没开始报名"
+        if st in ("running", "ended"):
+            return "这个活动的报名已经结束了"
+    if str(code) == "-2000":
+        return (base + "。如果是审核制活动，"
+                "待审核的人也算在名额里，可能是没名额了，去 App 里看一眼最准。")
+    return base
+
+
+def _build_signup_data(info, name: str) -> str:
+    """把 /v2/signup/info 返回的表单模板转成提交用的 data 字符串。
+
+    data 是 JSON 字符串（不是对象），字段结构沿用 App：
+    {key, fullid, title, content, conent, notNull, notList, system}
+    姓名字段用当前账号姓名预填，其余留空由用户自行到 App 补。
+    """
+    fields = None
+    node = info.get("data") if isinstance(info, dict) and isinstance(info.get("data"), dict) else info
+    if isinstance(node, dict):
+        for k in ("list", "fields", "formList", "items", "data"):
+            v = node.get(k)
+            if isinstance(v, list):
+                fields = v
+                break
+    if not fields:
+        return "[]"
+    out = []
+    for f in fields:
+        if not isinstance(f, dict):
+            continue
+        title = str(f.get("title") or "")
+        content = name if (name and "姓名" in title) else ""
+        out.append({
+            "key": f.get("key", ""),
+            "fullid": str(f.get("fullid", "")),
+            "title": title,
+            "content": content,
+            "conent": content,
+            "notNull": str(f.get("notNull", "false")),
+            "notList": str(f.get("notList", "false")),
+            "system": f.get("system", 0),
+        })
+    return json.dumps(out, ensure_ascii=False)
 
 
 class Hub:
@@ -262,6 +328,91 @@ class Hub:
         }
 
     # ---------------------------------------------------------------- 状态
+    # ------------------------------------------------ 报名 / 取消报名
+    def _patch_item(self, aid: str, detail: dict) -> None:
+        """用最新详情就地更新内存里的那一条，界面无需整轮重抓。"""
+        if not isinstance(detail, dict):
+            return
+        from rules import normalize
+        n = normalize(detail, self.cfg.get("status_map"))
+        sid = str(detail.get("signUpId", "0"))
+        mine = bool(detail.get("injoin")) or sid not in ("", "0", "None")
+        for it in self.items:
+            if it["aid"] == str(aid):
+                it["quota"] = n["quota"]
+                it["joined"] = n["joined"]
+                it["capacity"] = n["capacity"]
+                it["can_join"] = bool(detail.get("canJoin"))
+                it["can_cancel"] = bool(detail.get("cancel") or detail.get("joinCanCancel"))
+                it["joined_by_me"] = mine
+                it["signup_id"] = "" if not mine else sid
+
+    def _after_signup(self, aid: str, msg: str) -> dict:
+        """报名/取消之后：清缓存、重拉详情、就地更新、写日志。"""
+        try:
+            self.mon.cache.drop([aid])
+            d = self.mon.client.detail(aid)
+            self.mon.cache.put_many({str(aid): d})
+            self._patch_item(aid, d)
+        except Exception as e:  # noqa: BLE001
+            self.log(f"报名后刷新详情失败：{e}")
+        self.log(msg)
+        return {"ok": True, "msg": msg}
+
+    def signup(self, aid: str) -> dict:
+        aid = str(aid or "").strip()
+        if not aid:
+            raise ValueError("缺少活动 ID")
+        c = self.mon.client
+        info = c.signup_form(aid)
+        data = _build_signup_data(info, self.name or "")
+        self.log(f"报名「{self._name_of(aid)}」表单 {len(data)} 字节：{data[:160]}")
+        try:
+            res = c.submit(aid, data=data)
+            self.log(f"报名返回：{str(res)[:220]}")
+        except ApiError as e:
+            self.log(f"报名失败：[{e.code}] {e.msg}")
+            if str(e.code) == "2000011":
+                return self._after_signup(aid, f"你已经报过「{self._name_of(aid)}」了")
+            item = next((it for it in self.items if it["aid"] == aid), None)
+            raise ValueError(_friendly_signup_error(e.code, e.msg, item))
+        sid = ""
+        if isinstance(res, dict):
+            d = res.get("data")
+            if isinstance(d, dict):
+                sid = str(d.get("signUpId") or "")
+            elif d is not None:
+                sid = str(d)
+        return self._after_signup(aid, f"已报名「{self._name_of(aid)}」" + (f"（编号 {sid}）" if sid else ""))
+
+    def cancel_signup(self, aid: str) -> dict:
+        aid = str(aid or "").strip()
+        item = next((it for it in self.items if it["aid"] == aid), None)
+        if not item:
+            raise ValueError("找不到这条活动")
+        sid = str(item.get("signup_id") or "")
+        if not sid:
+            # 内存里没有 signUpId 就现拉一次详情
+            d = self.mon.client.detail(aid)
+            sid = str((d or {}).get("signUpId") or "")
+            if sid in ("", "0", "None"):
+                raise ValueError("这条活动没有报名记录，无法取消")
+            self._patch_item(aid, d)
+        self.log(f"取消报名「{self._name_of(aid)}」signUpId={sid}")
+        try:
+            res = self.mon.client.cancel(sid)
+            self.log(f"取消返回：{str(res)[:220]}")
+        except ApiError as e:
+            self.log(f"取消失败：[{e.code}] {e.msg}")
+            raise ValueError(_friendly_signup_error(e.code, e.msg, item))
+        return self._after_signup(aid, f"已取消报名「{self._name_of(aid)}」")
+
+    def _name_of(self, aid: str) -> str:
+        for it in self.items:
+            if it["aid"] == str(aid):
+                return it.get("name", "")
+        return str(aid)
+
     def state(self) -> dict:
         items = list(self.items)
         cnt: dict[str, int] = {}
@@ -561,6 +712,17 @@ class Handler(SimpleHTTPRequestHandler):
         elif u.path == "/api/token":
             hub.refresh_token()
             self._json({"ok": True})
+        elif u.path in ("/api/signup", "/api/cancel"):
+            aid = str(body.get("aid") or "").strip()
+            try:
+                if u.path == "/api/signup":
+                    self._json(hub.signup(aid))
+                else:
+                    self._json(hub.cancel_signup(aid))
+            except ApiError as e:
+                self._json({"ok": False, "error": e.msg, "code": e.code}, 400)
+            except Exception as e:  # noqa: BLE001
+                self._json({"ok": False, "error": str(e)}, 400)
         else:
             self._json({"error": "not found"}, 404)
 

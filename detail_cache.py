@@ -83,6 +83,15 @@ class DetailCache:
                         pass
         return out
 
+    def drop(self, aids) -> None:
+        """删掉若干条缓存（报名/取消后强制下次重新拉）。"""
+        aids = [str(a) for a in aids]
+        if not aids:
+            return
+        c = self._conn()
+        c.executemany("DELETE FROM details WHERE aid=?", [(a,) for a in aids])
+        c.commit()
+
     def put_many(self, items: dict[str, dict]) -> None:
         if not items:
             return
