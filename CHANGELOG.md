@@ -2,6 +2,11 @@
 
 本项目的版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)：`主版本.次版本.修订号`。
 
+## [2.0.2] — 2026-10-21
+
+### 修复
+- **登录后不跳转、页面像是刷新了一下，反复刷新又能进去**：`SimpleHTTPRequestHandler` 不发 `cache-control`，浏览器按 `Last-Modified` 做启发式缓存；登录成功后跳转 `/` 命中了缓存里的 `login.html`。现在覆盖 `end_headers()`：`.html` 与 `/` 发 `no-store`，`css/js/woff` 发 `max-age=604800`（配合 `?v=` 版本号）。
+
 ## [2.0.1] — 2026-10-21
 
 ### 修复
