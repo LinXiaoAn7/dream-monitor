@@ -18,7 +18,7 @@ function rollNumber(el, to) {
   const t0 = performance.now();
   const dur = 420;
   const step = (now) => {
-    const p = Math.min(1, (now - t0) / dur);
+    const p = Math.min(1, Math.max(0, (now - t0) / dur));
     const eased = 1 - Math.pow(1 - p, 3);
     el.textContent = Math.round(from + (to - from) * eased);
     if (p < 1) requestAnimationFrame(step);
@@ -246,7 +246,7 @@ function renderScore(p) {
 async function loadScore() {
   try {
     const r = await fetch("/api/profile");
-    if (r.status === 401) { location.replace("/login.html"); return; }
+    if (r.status === 401) { location.replace("/login.html?again=1"); return; }
     const p = await r.json();
     renderScore(p);
     if (p.score_scanning) {

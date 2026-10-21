@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>到梦空间 · 活动看板</title>
-<link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/app.css?v=2.0.1">
 </head>
 <body>
 <div class="app app--narrow">
@@ -19,7 +19,8 @@
   <section class="auth">
     <h1 class="auth-title">账号登录</h1>
 
-    <form class="auth-form" id="form" autocomplete="on" novalidate>
+    <form class="auth-form" id="form" autocomplete="on" novalidate
+        onsubmit="return false;">
       <label class="field">
         <span class="field-label">手机号</span>
         <input class="field-input" id="account" name="account" type="tel"
@@ -38,9 +39,10 @@
         <button class="btn btn--solid auth-submit" id="submit" type="submit">登录</button>
       </div>
     </form>
+      <noscript><p class="auth-hint" data-kind="error">这个页面需要 JavaScript，请换用 Chrome / Edge / Safari 打开。</p></noscript>
   </section>
 
 </div>
-<script src="/login.js"></script>
+<script src="/login.js?v=2.0.1"></script>
 </body>
 </html>

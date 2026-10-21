@@ -8,6 +8,7 @@ let busy = false;
 
 const qs = new URLSearchParams(location.search);
 const REAUTH = qs.get("reauth") === "1";
+const AGAIN = qs.get("again") === "1";
 const PRESET = (qs.get("account") || "").trim();
 
 function say(msg, kind) {
@@ -50,6 +51,18 @@ async function doLogin() {
       return;
     }
     submit.textContent = "进入看板…";
+    /* 确认浏览器真的存下了登录 Cookie；存不下来时跳过去也会被踢回登录页 */
+    let ok = false;
+    try {
+      const c = await fetch("/api/me", { credentials: "same-origin" });
+      ok = c.ok;
+    } catch (_) { ok = false; }
+    if (!ok) {
+      say("登录成功，但浏览器没有保存登录状态（可能禁用了 Cookie 或用了无痕模式）。"
+          + "请换 Chrome / Edge / Safari 打开，别在微信或 QQ 的内置浏览器里登录。");
+      idle();
+      return;
+    }
     say("");
     window.location.replace("/");
     setTimeout(() => { window.location.href = "/"; }, 1500);
@@ -77,4 +90,10 @@ if (REAUTH) {
   $("account").readOnly = !!PRESET;
   say(PRESET ? "登录状态已失效，请重新输入密码" : "登录状态已失效，请重新输入账号密码", "info");
   $("password").focus();
+}
+
+/* 刚登录完又被踢回登录页：说明浏览器把 Cookie 丢了 */
+if (AGAIN && !REAUTH) {
+  say("登录状态没保存下来：浏览器可能禁用了 Cookie，或是在微信 / QQ 内置浏览器里打开。"
+      + "请换 Chrome / Edge / Safari 重试。", "error");
 }
