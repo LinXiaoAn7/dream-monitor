@@ -85,7 +85,9 @@ def normalize(a: dict, status_map: dict | None = None) -> dict:
     cap_raw = _pick(a, "joinmaxnum", "activityMaxNum", "maxNum", "quota",
                     "joinMaxNum", "limitNum", "personNum")
     cap = _int(cap_raw, -1)
-    if str(cap_raw).strip() == "不限" or cap_raw is None:
+    if cap_raw is None or str(cap_raw).strip() == "":
+        quota = -2          # -2 = 详情还没拿到，名额未知（不是“不限”）
+    elif str(cap_raw).strip() == "不限":
         quota = -1
     else:
         quota = max(cap - joined, 0) if cap > 0 else -1
@@ -146,7 +148,7 @@ def fmt_ts(t: float | None) -> str:
 
 
 def describe(act: dict) -> str:
-    q = "不限" if act["quota"] < 0 else str(act["quota"])
+    q = "—" if act["quota"] == -2 else ("不限" if act["quota"] < 0 else str(act["quota"]))
     parts = [
         f"{act['name']}",
         f"状态={STATE_LABEL.get(act['state'], act['state'])}({act['status_raw']})",

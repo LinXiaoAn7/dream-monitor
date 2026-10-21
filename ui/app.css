@@ -690,6 +690,16 @@ body {
 /* ============================ 头像菜单 ============================ */
 .avatar-wrap { position: relative; display: flex; align-items: center; }
 
+.me-name {
+  font-size: 12px;
+  letter-spacing: .04em;
+  color: var(--text-body);
+  max-width: 8em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .avatar {
   width: 30px;
   height: 30px;
@@ -751,6 +761,7 @@ body {
   .brand { min-width: 0; }
   .brand-sub { display: block; font-size: 9px; letter-spacing: .06em; }
   .mast-actions { width: auto; justify-content: flex-end; }
+  .me-name { display: none; }
   .shell { grid-template-columns: 1fr; gap: var(--s4); }
   .rail { flex-direction: row; gap: var(--s4); padding-top: 0;
           border-bottom: 1px solid var(--border-hair); }

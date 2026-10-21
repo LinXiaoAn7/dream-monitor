@@ -286,10 +286,14 @@ class Monitor:
                     stored = json.loads(row["raw"] or "{}")
                 except Exception:  # noqa: BLE001
                     stored = {}
-                enriched = any(k in stored for k in ("joinmaxnum", "joinMaxNum", "joinNum"))
+                # 存量数据一律带上，否则列表项缺少 joinmaxnum 时名额会变成“不限”
+                if stored:
+                    stored_map[aid] = stored
+                # 已经存过名额字段的不用再打详情；只看名额字段，别用 joinNum 冒充
+                enriched = any(k in stored for k in
+                               ("joinmaxnum", "joinMaxNum", "activityMaxNum"))
                 if not enriched and budget > 0:
                     budget -= 1
-                    stored_map[aid] = stored
                     need.append(aid)
 
         # ---- 2.5 先出图：列表已经拿到了，名额/地点随后再补 ----

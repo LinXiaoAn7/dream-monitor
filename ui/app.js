@@ -36,6 +36,7 @@ function stamp(ts) {
 }
 
 function quotaText(it) {
+  if (it.quota === -2) return "—";     // 详情没拿到，名额未知
   if (it.quota < 0) return "不限";
   return String(it.quota);
 }
@@ -151,11 +152,20 @@ async function openDetail(aid) {
     try {
       const r = await fetch(`/api/activity?aid=${encodeURIComponent(aid)}`);
       const j = await r.json();
+      if (!r.ok || j.error) {
+        throw new Error(j.error || ("HTTP " + r.status));
+      }
       d = j.detail || j;
       detailCache.set(aid, d);
     } catch (e) {
       $("d-title").textContent = "读取失败";
-      $("d-body").innerHTML = `<div class="drawer-note">${esc(String(e))}</div>`;
+      $("d-body").innerHTML =
+        `<div class="drawer-note">这条活动的详情没取到：${esc(String(e && e.message || e))}</div>`
+        + `<button class="btn btn--ghost" id="d-retry" type="button">重试</button>`;
+      $("d-retry").addEventListener("click", () => {
+        detailCache.delete(aid);
+        openDetail(aid);
+      });
       return;
     }
   }
@@ -236,7 +246,7 @@ function renderScore(p) {
   const s = p.score;
   if (s) {
     const v = Number(s.total);
-    $("sc-score").textContent = Number.isFinite(v) ? v.toFixed(2) : (s.text || "—");
+    $("sc-score").textContent = Number.isFinite(v) ? String(Math.round(v)) : (s.text || "—");
     $("sc-cap").textContent =
       `数据来源：${s.source || p.score_source}` + (s.at ? ` · 读取于 ${fmtTs(s.at)}` : "");
   } else {
@@ -304,6 +314,8 @@ async function pull() {
   S = await r.json();
   if (S.me) {
     const who = S.me.name || S.me.account || "";
+    const nm = $("me-name");
+    if (nm) nm.textContent = S.me.name || "";
     const school = S.me.school || "";
     $("brand-sub").innerHTML =
       `${school ? esc(school) + " · " : ""}活动看板 <b class="brand-by">by 林小安</b>`;
