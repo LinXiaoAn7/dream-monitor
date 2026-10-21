@@ -565,7 +565,9 @@ class Handler(SimpleHTTPRequestHandler):
 
 
 class Server(ThreadingHTTPServer):
-    allow_reuse_address = False
+    # Windows 上 SO_REUSEADDR 会让两个进程同时绑同一端口，必须关掉；
+    # Linux 上关掉它则会导致重启时撞上 TIME_WAIT（Address already in use）。
+    allow_reuse_address = (os.name != "nt")
     daemon_threads = True
 
 
