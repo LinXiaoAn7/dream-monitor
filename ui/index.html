@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>到梦空间 · 活动看板</title>
-<link rel="stylesheet" href="/app.css?v=2.0.1">
+<link rel="stylesheet" href="/app.css?v=2.0.5">
 </head>
 <body>
 <div class="app">
@@ -124,7 +124,15 @@
     <h2 class="drawer-title" id="d-title">—</h2>
     <div class="drawer-body" id="d-body"></div>
   </aside>
-  <div class="scrim" id="scrim"></div>
+  <dialog class="confirm" id="confirm" aria-labelledby="confirm-title">
+  <h2 class="confirm-title" id="confirm-title">退出登录？</h2>
+  <p class="confirm-text" id="confirm-text">退出后需要重新输入到梦空间账号和密码才能进来。</p>
+  <div class="confirm-actions">
+    <button class="btn btn--ghost" id="confirm-no" type="button">取消</button>
+    <button class="btn" id="confirm-yes" type="button">退出登录</button>
+  </div>
+</dialog>
+<div class="scrim" id="scrim"></div>
 
   <div class="pbar" id="pbar" hidden role="progressbar" aria-live="polite"
        aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
@@ -135,6 +143,6 @@
     </div>
   </div>
 </div>
-<script src="/app.js?v=2.0.1"></script>
+<script src="/app.js?v=2.0.5"></script>
 </body>
 </html>

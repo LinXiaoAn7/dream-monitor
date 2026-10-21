@@ -279,7 +279,36 @@ $("sc-rescan").addEventListener("click", async () => {
   loadScore();
 });
 
+/* 通用确认框：返回 Promise<boolean> */
+let confirmResolve = null;
+function ask(opts) {
+  const d = $("confirm");
+  $("confirm-title").textContent = opts.title || "确认操作？";
+  $("confirm-text").textContent = opts.text || "";
+  $("confirm-yes").textContent = opts.ok || "确认";
+  if (!d.open) d.showModal();
+  return new Promise((resolve) => { confirmResolve = resolve; });
+}
+function closeConfirm(v) {
+  const d = $("confirm");
+  if (d.open) d.close();
+  if (confirmResolve) { confirmResolve(v); confirmResolve = null; }
+}
+$("confirm-yes").addEventListener("click", () => closeConfirm(true));
+$("confirm-no").addEventListener("click", () => closeConfirm(false));
+$("confirm").addEventListener("cancel", (e) => { e.preventDefault(); closeConfirm(false); });
+$("confirm").addEventListener("click", (e) => {
+  if (e.target === $("confirm")) closeConfirm(false);   // 点空白处取消
+});
+
 async function logout() {
+  toggleMenu(false);
+  const ok = await ask({
+    title: "退出登录？",
+    text: "退出后需要重新输入到梦空间账号和密码才能进来，看板数据保留在服务器上。",
+    ok: "退出登录",
+  });
+  if (!ok) return;
   await fetch("/api/logout", { method: "POST" });
   location.replace("/login.html");
 }

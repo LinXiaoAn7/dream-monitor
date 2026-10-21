@@ -680,6 +680,52 @@ body {
   margin-top: var(--s4);
 }
 
+/* ============================ 确认弹窗 ============================ */
+.confirm {
+  width: min(380px, calc(100vw - var(--s6)));
+  padding: var(--s5) var(--s5) var(--s4);
+  border: 0;
+  border-top: 2px solid var(--ink);
+  border-radius: var(--r-flat);
+  background: var(--surface-base);
+  color: var(--text-body);
+}
+
+.confirm::backdrop {
+  background: var(--scrim);
+}
+
+.confirm[open] {
+  animation: confirm-in var(--dur-panel) var(--ease-spring) both;
+}
+
+@keyframes confirm-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.confirm-title {
+  margin: 0 0 var(--s3);
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: .02em;
+  color: var(--text-strong);
+}
+
+.confirm-text {
+  margin: 0 0 var(--s5);
+  font-size: 13px;
+  line-height: 1.75;
+  color: var(--text-mute);
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s3);
+}
+
 /* 尊重系统的减少动效设置 */
 @media (prefers-reduced-motion: reduce) {
   .row--in { animation: none; opacity: 1; transform: none; }
