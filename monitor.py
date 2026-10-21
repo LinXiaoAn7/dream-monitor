@@ -266,8 +266,10 @@ class Monitor:
 
         # ---- 2. 判定谁需要详情
         need: list[str] = []
+        stale: list[tuple[float, str]] = []
         stored_map: dict[str, dict] = {}
         seen: set[str] = set()
+        stale_after = int(self.cfg.get("detail_ttl", 900))
         for it in raw_items:
             if not enrich:
                 break
@@ -279,22 +281,37 @@ class Monitor:
             if row is None:
                 if _alive(it):
                     need.append(aid)
-            else:
-                if not _alive(it):
-                    continue
-                try:
-                    stored = json.loads(row["raw"] or "{}")
-                except Exception:  # noqa: BLE001
-                    stored = {}
-                # 存量数据一律带上，否则列表项缺少 joinmaxnum 时名额会变成“不限”
-                if stored:
-                    stored_map[aid] = stored
-                # 已经存过名额字段的不用再打详情；只看名额字段，别用 joinNum 冒充
-                enriched = any(k in stored for k in
-                               ("joinmaxnum", "joinMaxNum", "activityMaxNum"))
-                if not enriched and budget > 0:
+                continue
+            if not _alive(it):
+                continue
+            try:
+                stored = json.loads(row["raw"] or "{}")
+            except Exception:  # noqa: BLE001
+                stored = {}
+            # 存量数据一律带上，否则列表项缺少 joinmaxnum 时名额会变成“不限”
+            if stored:
+                stored_map[aid] = stored
+            # 已经存过名额字段的不用再打详情；只看名额字段，别用 joinNum 冒充
+            enriched = any(k in stored for k in
+                           ("joinmaxnum", "joinMaxNum", "activityMaxNum"))
+            try:
+                age = time.time() - float(row["updated"] or 0)
+            except Exception:  # noqa: BLE001
+                age = 1e9
+            if not enriched:
+                if budget > 0:
                     budget -= 1
                     need.append(aid)
+            elif age > stale_after:
+                # 名额会变，旧详情要按 ttl 重新拉，否则数字一直停在第一次抓到的值
+                stale.append((age, aid))
+
+        if stale:
+            stale.sort(reverse=True)          # 最旧的先刷
+            picked = [aid for _, aid in stale[:max(0, budget)]]
+            if picked:
+                log.info("按 TTL 刷新 %d 条旧详情（共 %d 条过期）", len(picked), len(stale))
+                need.extend(picked)
 
         # ---- 2.5 先出图：列表已经拿到了，名额/地点随后再补 ----
         if self.on_list and raw_items:
@@ -417,6 +434,9 @@ class Monitor:
                 if p_quota == 0 and quota > 0 and (cand is None or cand[0] < 2):
                     cand = (2, "quota", f"余量 0 → {quota}")
 
+            # 名额未知（-2）时不要拿来和旧值比对，否则 0 → 未知 会被误判成“满员→开放”
+            if quota == -2:
+                cand = None
             if cand:
                 events.append((cand[1], act, cand[2]))
             pending.append((aid, act["name"], state, quota, act["raw"]))

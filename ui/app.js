@@ -325,6 +325,16 @@ async function pull() {
   renderBoard();
   renderList();
   renderProgress(S);
+  autoRefreshIfStale();
+}
+
+/* 页面打开时若数据已经超过 10 分钟，自动抓一次；之后仍靠手动刷新 */
+let autoFired = false;
+function autoRefreshIfStale() {
+  if (autoFired || S.busy) return;
+  const age = S.stale_secs;
+  if (age === null || age === undefined) { autoFired = true; refresh(); return; }
+  if (age > 600) { autoFired = true; refresh(); }
 }
 
 async function refresh() {

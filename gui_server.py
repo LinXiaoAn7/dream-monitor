@@ -277,6 +277,7 @@ class Hub:
             "enriching": self.enriching,
             "progress": dict(self.mon.progress or {}),
             "last_sync": self.last_sync,
+            "stale_secs": (time.time() - self.last_sync) if self.last_sync else None,
             "token": str((self.cfg.get("api") or {}).get("token", "")),
             "me": {"uid": self.uid, "account": self.account,
                    "name": self.name, "school": self.school,

@@ -80,8 +80,10 @@ def normalize(a: dict, status_map: dict | None = None) -> dict:
     aid = str(_pick(a, "activityId", "id", "activityid", "actId", default=""))
     name = str(_pick(a, "activityName", "name", "title", "actName", default="(无标题)"))
 
-    joined = _int(_pick(a, "joinNum", "joinUserNum", "enrollNum", "signupNum",
-                        "joinCount", "alreadyJoinNum"), 0)
+    joined_raw = _pick(a, "joinNum", "joinUserNum", "enrollNum", "signupNum",
+                       "joinCount", "alreadyJoinNum")
+    joined_known = joined_raw is not None and str(joined_raw).strip() not in ("", "None")
+    joined = _int(joined_raw, 0)
     cap_raw = _pick(a, "joinmaxnum", "activityMaxNum", "maxNum", "quota",
                     "joinMaxNum", "limitNum", "personNum")
     cap = _int(cap_raw, -1)
@@ -89,6 +91,8 @@ def normalize(a: dict, status_map: dict | None = None) -> dict:
         quota = -2          # -2 = 详情还没拿到，名额未知（不是“不限”）
     elif str(cap_raw).strip() == "不限":
         quota = -1
+    elif not joined_known:
+        quota = -2          # 有上限但没拿到已报人数，算不出剩余
     else:
         quota = max(cap - joined, 0) if cap > 0 else -1
 
