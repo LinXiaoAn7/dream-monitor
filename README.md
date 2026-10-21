@@ -153,3 +153,7 @@ A：`DM_PORT=9000 sudo bash deploy/install.sh`，或改 `/etc/systemd/system/dre
 ## 免责声明
 
 个人学习用途。数据来自公开可访问的客户端接口，仓库内不包含任何账号、密码、令牌或他人隐私数据（`config.yaml` 已被 `.gitignore` 排除）。请勿用于批量刷取或商业用途。
+
+## 许可证
+
+[MIT](LICENSE) © 2026 LinXiaoAn
