@@ -203,7 +203,8 @@ async function openDetail(aid) {
   ];
   // 报名状态：详情里的 canJoin / cancel / signUpId 说了算
   const sid = String(d.signUpId ?? "0");
-  const mine = Boolean(d.injoin) || !["", "0", "None", "null", "undefined"].includes(sid);
+  // injoin 在未报名时也返回 true，只能看 signUpId
+  const mine = !["", "0", "None", "null", "undefined"].includes(sid);
   const canJoin = Boolean(d.canJoin) && !mine;
   const canCancel = Boolean(d.cancel || d.joinCanCancel) && mine;
 
@@ -501,6 +502,9 @@ async function pull() {
   const r = await fetch("/api/state");
   if (r.status === 401) { location.replace("/login.html"); return; }
   S = await r.json();
+  if (S.mine_warming && !window.__mineRetry) {
+    window.__mineRetry = setTimeout(() => { window.__mineRetry = null; pull(); }, 5000);
+  }
   if (S.me) {
     const who = S.me.name || S.me.account || "";
     const nm = $("me-name");

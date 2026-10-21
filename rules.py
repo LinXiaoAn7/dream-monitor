@@ -138,8 +138,9 @@ def normalize(a: dict, status_map: dict | None = None) -> dict:
         "can_join": bool(_pick(a, "canJoin", default=False)),
         "can_cancel": bool(_pick(a, "cancel", "joinCanCancel", default=False)),
         "signup_id": str(_pick(a, "signUpId", default="") or ""),
-        "joined_by_me": bool(_pick(a, "injoin", default=False))
-                        or str(_pick(a, "signUpId", default="0")) not in ("", "0", "None"),
+        # 只看 signUpId：详情接口在「没报名」时也会返回 injoin=true，不能信
+        "joined_by_me": str(_pick(a, "signUpId", "signupId", default="0") or "0")
+        not in ("", "0", "None", "null"),
         "credit": str(_pick(a, "credit", "score", "creditScore", "integral", default="") or ""),
         "sign_start": sign_start,
         "sign_end": sign_end,

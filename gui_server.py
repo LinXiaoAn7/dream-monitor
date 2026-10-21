@@ -340,7 +340,7 @@ class Hub:
         from rules import normalize
         n = normalize(detail, self.cfg.get("status_map"))
         sid = str(detail.get("signUpId", "0"))
-        mine = bool(detail.get("injoin")) or sid not in ("", "0", "None")
+        mine = sid not in ("", "0", "None", "null")   # injoin 不可信：未报名时它也是 True
         for it in self.items:
             if it["aid"] == str(aid):
                 it["quota"] = n["quota"]
@@ -510,6 +510,7 @@ class Hub:
             "items": live,
             "logs": list(reversed(self.logs[-24:])),
             "token_job": self.token_job,
+            "mine_warming": not (self._mine_cache and time.time() - self.mine_at < 120),
             "auth": {
                 "stale": bool(getattr(self.mon, "auth_stale", False)),
                 "msg": getattr(self.mon, "auth_msg", ""),
