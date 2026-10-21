@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>到梦空间 · 方案 B「深空 Void」</title>
+<style>
+/* ============================================================
+   方案 B · 深空 Void
+   参考：Vercel Dashboard（玻璃顶栏与层级）、Raycast（紧凑列表 + 侧栏选中态）、
+        shadcn/ui dark（中性暗阶 + 单一薄荷强调）
+   令牌：Global → Semantic → Component
+   ============================================================ */
+:root {
+  /* ---- Global：色 ---- */
+  --g-void-950: #07080A;
+  --g-void-900: #0B0D10;
+  --g-void-850: #101317;
+  --g-void-800: #161A1F;
+  --g-void-700: #1E242B;
+  --g-void-500: #7A828D;
+  --g-void-300: #A8B0BB;
+  --g-fog-100: #E8ECF1;
+  --g-mint: #6EE7B7;
+  --g-mint-dim: rgba(110, 231, 183, .14);
+
+  /* ---- Global：间距（4px 网格） ---- */
+  --s1: 4px;  --s2: 8px;  --s3: 12px; --s4: 16px;
+  --s5: 24px; --s6: 32px; --s7: 48px; --s8: 64px;
+
+  /* ---- Global：圆角（3 档） ---- */
+  --r-sm: 6px; --r-md: 10px; --r-lg: 16px;
+
+  /* ---- Global：动效 ---- */
+  --dur-micro: 90ms;
+  --dur-local: 150ms;
+  --dur-page: 260ms;
+  --ease-out: cubic-bezier(.16, 1, .3, 1);
+  --ease-in: cubic-bezier(.4, 0, 1, 1);
+  --spring-panel: cubic-bezier(.34, 1.28, .64, 1);
+
+  /* ---- Semantic ---- */
+  --surface-page: var(--g-void-950);
+  --surface-card: var(--g-void-900);
+  --surface-raised: var(--g-void-850);
+  --surface-sunken: var(--g-void-800);
+  --text-strong: var(--g-fog-100);
+  --text-body: var(--g-void-300);
+  --text-mute: var(--g-void-500);
+  --border-hair: rgba(255, 255, 255, .07);
+  --border-strong: rgba(255, 255, 255, .13);
+  --interactive: var(--g-mint);
+  --interactive-dim: var(--g-mint-dim);
+
+  /* ---- Component ---- */
+  --rail-w: 64px;
+  --panel-w: 380px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0; padding: 0;
+  height: 100%;
+  background: var(--surface-page);
+  color: var(--text-body);
+  font-family: "Genshin", "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+
+/* ============================ 骨架：左栏 + 主区 + 右面板 ============================ */
+.shell {
+  display: grid;
+  grid-template-columns: var(--rail-w) minmax(0, 1fr);
+  height: 100vh;
+}
+
+/* ============================ 左栏 ============================ */
+.rail {
+  display: flex; flex-direction: column; align-items: center;
+  gap: var(--s2);
+  padding: var(--s4) 0;
+  border-right: 1px solid var(--border-hair);
+  background: var(--surface-card);
+}
+
+.rail-logo {
+  width: 32px; height: 32px;
+  border-radius: var(--r-md);
+  background: var(--interactive-dim);
+  color: var(--interactive);
+  display: grid; place-items: center;
+  font-size: 13px; font-weight: 700;
+  margin-bottom: var(--s4);
+}
+
+.rail-btn {
+  width: 40px; height: 40px;
+  border-radius: var(--r-md);
+  display: grid; place-items: center;
+  color: var(--text-mute);
+  position: relative;
+  transition: color var(--dur-micro) var(--ease-out),
+              background var(--dur-micro) var(--ease-out),
+              transform var(--dur-micro) var(--ease-out);
+}
+.rail-btn:hover { color: var(--text-strong); background: var(--surface-raised); }
+.rail-btn:active { transform: scale(.94); }
+.rail-btn[aria-selected="true"] { color: var(--interactive); background: var(--interactive-dim); }
+
+.rail-btn[aria-selected="true"]::before {
+  content: "";
+  position: absolute; left: -12px; top: 50%;
+  width: 2px; height: 18px;
+  background: var(--interactive);
+  border-radius: 2px;
+  transform: translateY(-50%);
+}
+
+.rail-foot { margin-top: auto; }
+
+/* ============================ 主区 ============================ */
+.main { display: flex; flex-direction: column; min-width: 0; }
+
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--s4);
+  padding: var(--s4) var(--s6);
+  border-bottom: 1px solid var(--border-hair);
+  background: rgba(11, 13, 16, .72);
+  backdrop-filter: blur(12px) saturate(1.2);
+  position: sticky; top: 0; z-index: 5;
+}
+
+.title { font-size: 16px; font-weight: 700; letter-spacing: .02em; color: var(--text-strong); }
+.title small { font-size: 11px; font-weight: 400; letter-spacing: .1em; color: var(--text-mute); margin-left: var(--s2); }
+
+.chips { display: flex; gap: var(--s2); }
+
+.chip {
+  padding: var(--s1) var(--s3);
+  font-size: 12px;
+  letter-spacing: .04em;
+  color: var(--text-mute);
+  border: 1px solid var(--border-hair);
+  border-radius: var(--r-sm);
+  transition: color var(--dur-micro) var(--ease-out),
+              border-color var(--dur-micro) var(--ease-out),
+              transform var(--dur-micro) var(--ease-out);
+}
+.chip:hover { color: var(--text-strong); border-color: var(--border-strong); transform: translateY(-1px); }
+.chip[aria-pressed="true"] { color: var(--interactive); border-color: var(--interactive); }
+
+.scroll { flex: 1; overflow-y: auto; padding: var(--s5) var(--s6) var(--s7); }
+
+/* ============================ 指标 ============================ */
+.metrics { display: flex; gap: var(--s6); margin-bottom: var(--s5); }
+
+.metric-k { font-size: 11px; letter-spacing: .12em; color: var(--text-mute); margin-bottom: var(--s1); }
+.metric-v { font-size: 26px; font-weight: 700; line-height: 1.1; color: var(--text-strong); font-variant-numeric: tabular-nums; }
+.metric-v.is-accent { color: var(--interactive); }
+
+/* ============================ 列表 ============================ */
+.rows { display: flex; flex-direction: column; gap: var(--s1); }
+
+.rows-item {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  gap: var(--s3);
+  align-items: center;
+  padding: var(--s3) var(--s3);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  animation: rowIn var(--dur-page) var(--ease-out) both;
+  transition: background var(--dur-micro) var(--ease-out),
+              transform var(--dur-micro) var(--ease-out),
+              box-shadow var(--dur-micro) var(--ease-out);
+}
+
+@keyframes rowIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.rows-item:hover { background: var(--surface-raised); transform: translateY(-1px); }
+.rows-item.is-on { background: var(--surface-raised); box-shadow: inset 0 0 0 1px var(--border-strong); }
+
+.dot-state { width: 6px; height: 6px; border-radius: 50%; background: var(--text-mute); }
+.dot-state.is-open { background: var(--interactive); box-shadow: 0 0 0 3px var(--interactive-dim); }
+.dot-state.is-soon { background: #E0B457; }
+.dot-state.is-full { background: #E06C6C; }
+
+.rows-main { min-width: 0; }
+
+.rows-title {
+  margin: 0 0 2px;
+  font-size: 14px; font-weight: 400; line-height: 1.4;
+  color: var(--text-strong);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.rows-sub { display: flex; gap: var(--s2); font-size: 11px; letter-spacing: .04em; color: var(--text-mute); }
+.rows-sub .sep { opacity: .4; }
+
+.rows-tail { font-size: 13px; font-variant-numeric: tabular-nums; color: var(--text-body); }
+.rows-tail.is-low { color: var(--interactive); }
+
+.badge {
+  font-size: 10px; letter-spacing: .08em;
+  padding: 1px var(--s2);
+  border-radius: var(--r-sm);
+  background: var(--surface-sunken);
+  color: var(--text-mute);
+}
+.badge.is-mine { background: var(--interactive-dim); color: var(--interactive); }
+
+/* ============================ 右面板 ============================ */
+.panel {
+  position: fixed; top: 0; right: 0; bottom: 0;
+  width: var(--panel-w);
+  border-left: 1px solid var(--border-strong);
+  background: var(--surface-card);
+  display: flex; flex-direction: column;
+  transform: translateX(100%);
+  transition: transform var(--dur-local) var(--spring-panel);
+  z-index: 30;
+  box-shadow: -24px 0 48px rgba(0, 0, 0, .45);
+}
+
+.panel.is-on { transform: none; }
+
+.scrim {
+  position: fixed; inset: 0;
+  background: rgba(7, 8, 10, .55);
+  opacity: 0; pointer-events: none;
+  transition: opacity var(--dur-local) var(--ease-out);
+  z-index: 25;
+}
+.scrim.is-on { opacity: 1; pointer-events: auto; }
+
+.panel-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--s4) var(--s5);
+  border-bottom: 1px solid var(--border-hair);
+}
+.panel-cap { font-size: 10px; letter-spacing: .16em; color: var(--text-mute); }
+
+.panel-body { padding: var(--s5); overflow-y: auto; min-width: 0; }
+
+.panel-title { margin: 0 0 var(--s4); font-size: 16px; font-weight: 700; line-height: 1.45; color: var(--text-strong);
+  overflow-wrap: anywhere; word-break: break-word; }
+
+.kv { display: grid; grid-template-columns: 56px 1fr; gap: var(--s3) var(--s4); font-size: 12px; }
+.kv dt { color: var(--text-mute); letter-spacing: .06em; }
+.kv dd { margin: 0; color: var(--text-body); }
+
+.panel-actions { display: flex; gap: var(--s3); margin-top: var(--s5); padding-top: var(--s4); border-top: 1px solid var(--border-hair); }
+
+.btn {
+  padding: var(--s2) var(--s4);
+  border-radius: var(--r-md);
+  font-size: 12px;
+  letter-spacing: .04em;
+  transition: transform var(--dur-micro) var(--ease-out), opacity var(--dur-micro) var(--ease-out);
+}
+.btn:active { transform: scale(.97); }
+.btn--solid { background: var(--interactive); color: #06231A; font-weight: 500; }
+.btn--ghost { border: 1px solid var(--border-strong); color: var(--text-body); }
+.btn--done { background: var(--surface-sunken); color: var(--text-mute); cursor: default; }
+
+/* ============================ 积分 ============================ */
+.score-wrap { padding: var(--s7) 0 0; }
+.score-k { font-size: 11px; letter-spacing: .16em; color: var(--text-mute); margin-bottom: var(--s3); }
+.score-v {
+  font-size: 76px; font-weight: 700; line-height: .95; letter-spacing: -.03em;
+  color: var(--interactive); font-variant-numeric: tabular-nums;
+}
+.score-v small { font-size: 16px; font-weight: 400; color: var(--text-mute); margin-left: var(--s2); }
+.score-note { margin-top: var(--s4); font-size: 11px; letter-spacing: .05em; color: var(--text-mute); }
+
+/* ============================ 窄屏 ============================ */
+@media (max-width: 900px) {
+  .shell { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .rail {
+    flex-direction: row; justify-content: flex-start;
+    border-right: 0; border-bottom: 1px solid var(--border-hair);
+    padding: var(--s2) var(--s3); gap: var(--s1);
+  }
+  .rail-logo { margin: 0 var(--s2) 0 0; }
+  .rail-btn[aria-selected="true"]::before { display: none; }
+  .rail-foot { margin-left: auto; margin-top: 0; }
+  .topbar { padding: var(--s3) var(--s4); }
+  .scroll { padding: var(--s4) var(--s4) var(--s7); }
+  .panel {
+    position: fixed; inset: auto 0 0 0; height: 72vh;
+    border-left: 0; border-top: 1px solid var(--border-strong);
+    border-radius: var(--r-lg) var(--r-lg) 0 0;
+    transform: translateY(100%);
+    z-index: 20;
+  }
+  .panel.is-on { transform: none; }
+  .score-v { font-size: 60px; }
+}
+
+/* 动效降级：系统开启减少动态时，直接给终态（也方便截图核对） */
+@media (prefers-reduced-motion: reduce) {
+  .panel, .scrim, .rows-item, .chip, .btn, .rail-btn, * { transition: none !important; }
+  .rows-item { animation: none !important; }
+}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- ---------------- 左栏 ---------------- -->
+  <nav class="rail" id="rail">
+    <div class="rail-logo">梦</div>
+    <button class="rail-btn" data-v="board" aria-selected="true" title="活动">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+        <rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v5"/>
+      </svg>
+    </button>
+    <button class="rail-btn" data-v="mine" aria-selected="false" title="我的活动">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+        <path d="M5 12l4 4 10-10"/>
+      </svg>
+    </button>
+    <button class="rail-btn" data-v="score" aria-selected="false" title="积分">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+        <path d="M12 3l2.6 5.6 6 .8-4.4 4.2 1.1 6L12 16.8 6.7 19.6l1.1-6L3.4 9.4l6-.8z"/>
+      </svg>
+    </button>
+    <button class="rail-btn rail-foot" title="账号">刘</button>
+  </nav>
+
+  <!-- ---------------- 主区 ---------------- -->
+  <div class="main">
+    <div class="topbar">
+      <div class="title" id="pageTitle">活动<small>四川职业技术学院</small></div>
+      <div class="chips" id="chips">
+        <button class="chip" aria-pressed="true">全部</button>
+        <button class="chip" aria-pressed="false">可报名</button>
+        <button class="chip" aria-pressed="false">未开始</button>
+      </div>
+    </div>
+
+    <div class="scroll" id="scroll">
+      <!-- 活动 -->
+      <div class="view" id="v-board">
+        <div class="metrics">
+          <div><div class="metric-k">可报名</div><div class="metric-v is-accent">38</div></div>
+          <div><div class="metric-k">即将开始</div><div class="metric-v">16</div></div>
+          <div><div class="metric-k">进行中</div><div class="metric-v">4</div></div>
+        </div>
+        <div class="rows" id="boardRows"></div>
+      </div>
+
+      <!-- 我的活动 -->
+      <div class="view" id="v-mine" hidden>
+        <div class="metrics">
+          <div><div class="metric-k">已报名</div><div class="metric-v">51</div></div>
+          <div><div class="metric-k">待审核</div><div class="metric-v">2</div></div>
+          <div><div class="metric-k">已完结</div><div class="metric-v">43</div></div>
+        </div>
+        <div class="rows" id="mineRows"></div>
+      </div>
+
+      <!-- 积分 -->
+      <div class="view" id="v-score" hidden>
+        <div class="score-wrap">
+          <div class="score-k">到梦空间积分</div>
+          <div class="score-v">43<small>分</small></div>
+          <div class="score-note">数据来源：到梦空间「我的」页 · 读取于 10.21 23:48</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ---------------- 右面板 ---------------- -->
+  <aside class="panel" id="panel">
+    <div class="panel-head">
+      <span class="panel-cap">活动详情</span>
+      <button class="rail-btn" id="panelClose" aria-label="关闭" style="width:28px;height:28px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <path d="M6 6l12 12M18 6L6 18"/>
+        </svg>
+      </button>
+    </div>
+    <div class="panel-body" id="panelBody"></div>
+  </aside>
+</div>
+
+<script>
+const DATA = [
+  { aid:"16684972", name:"e路同行 清风护航｜网络辟谣主题作品征集活动", cat:"思想引领活动", time:"10.22 17:30", quota:221, mine:true, state:"open" },
+  { aid:"16652489", name:"青听心声—团团熊树洞", cat:"校内管理服务及培训", time:"10.22 09:00", quota:1246, mine:false, state:"open" },
+  { aid:"16705892", name:"“e 路同行 清风护航”志愿宣讲", cat:"志愿服务与公益活动", time:"10.23 14:00", quota:49, mine:false, state:"open" },
+  { aid:"16676470", name:"以声践初心，筑梦新征程 射洪校区合唱团开班典礼", cat:"参与艺术活动", time:"10.22 15:00", quota:10, mine:false, state:"open" },
+  { aid:"16682678", name:"射洪校区-图书馆学生管理委员会—纸书荐书", cat:"参加社会实践", time:"10.24 12:00", quota:807, mine:false, state:"soon" },
+  { aid:"16674589", name:"龙凤校区1号编程爱好者协会——敲启新世界", cat:"相关讲座、活动", time:"10.24 10:30", quota:262, mine:true, state:"soon" },
+  { aid:"16658677", name:"龙凤校区—5号摊位 云川视觉韵律社“光影赴新”", cat:"校内管理服务及培训", time:"10.24 10:30", quota:1000, mine:false, state:"soon" },
+  { aid:"16671354", name:"光影之约，同心观影禁毒观影活动", cat:"相关讲座、活动", time:"10.22 14:30", quota:0, mine:false, state:"full" },
+];
+
+const MINE = [
+  { aid:"16684972", name:"e路同行 清风护航｜网络辟谣主题作品征集活动", cat:"思想引领活动", time:"10.22 17:30", quota:221, mine:true, state:"open" },
+  { aid:"16682931", name:"龙凤校区11号摊位青年马克思主义协会赓续红色信仰", cat:"校内管理服务及培训", time:"10.24 08:00", quota:513, mine:true, state:"open" },
+  { aid:"16674589", name:"龙凤校区1号编程爱好者协会——敲启新世界", cat:"相关讲座、活动", time:"10.24 10:30", quota:262, mine:true, state:"open" },
+  { aid:"16658677", name:"龙凤校区—5号摊位 云川视觉韵律社“光影赴新”", cat:"校内管理服务及培训", time:"10.24 10:30", quota:1000, mine:true, state:"open" },
+  { aid:"16630112", name:"“智启未来，职引青春”信息技术行业企业进校宣讲会", cat:"相关讲座、活动", time:"10.20 19:00", quota:0, mine:true, state:"ended" },
+];
+
+function itemHTML(it, i) {
+  return `
+    <article class="rows-item" data-aid="${it.aid}" style="animation-delay:${Math.min(i, 9) * 18}ms">
+      <span class="dot-state is-${it.state}"></span>
+      <div class="rows-main">
+        <h3 class="rows-title">${it.name}</h3>
+        <div class="rows-sub">
+          ${it.mine ? '<span class="badge is-mine">已报名</span><span class="sep">·</span>' : ""}
+          <span>${it.cat}</span><span class="sep">·</span><span>${it.time}</span>
+        </div>
+      </div>
+      <span class="rows-tail ${it.quota <= 10 ? "is-low" : ""}">${it.state === "ended" ? "—" : it.quota}</span>
+    </article>`;
+}
+
+document.getElementById("boardRows").innerHTML = DATA.map(itemHTML).join("");
+document.getElementById("mineRows").innerHTML = MINE.map(itemHTML).join("");
+
+/* ---- 视图切换 ---- */
+const rail = document.getElementById("rail");
+rail.addEventListener("click", (e) => {
+  const btn = e.target.closest(".rail-btn[data-v]");
+  if (!btn) return;
+  rail.querySelectorAll(".rail-btn[data-v]").forEach((b) => b.setAttribute("aria-selected", String(b === btn)));
+  ["board", "mine", "score"].forEach((v) => {
+    document.getElementById("v-" + v).hidden = v !== btn.dataset.v;
+  });
+  const v = document.getElementById("v-" + btn.dataset.v);
+  v.style.animation = "none";
+  void v.offsetWidth;
+  v.style.animation = "";
+  document.getElementById("pageTitle").firstChild.textContent =
+    { board: "活动", mine: "我的活动", score: "积分" }[btn.dataset.v];
+});
+
+/* ---- 过滤 chip ---- */
+const chips = document.getElementById("chips");
+chips.addEventListener("click", (e) => {
+  const c = e.target.closest(".chip");
+  if (!c) return;
+  chips.querySelectorAll(".chip").forEach((x) => x.setAttribute("aria-pressed", String(x === c)));
+});
+
+/* ---- 右面板 ---- */
+const panel = document.getElementById("panel");
+const panelBody = document.getElementById("panelBody");
+
+function showDetail(aid, mine) {
+  const it = DATA.concat(MINE).find((x) => x.aid === aid) || DATA[0];
+  const joined = it.mine;
+  panelBody.innerHTML = `
+    <h2 class="panel-title">${it.name}</h2>
+    <dl class="kv">
+      <dt>状态</dt><dd>${it.state === "open" ? "报名中" : it.state === "soon" ? "未开始" : it.state === "full" ? "已满员" : "已完结"}</dd>
+      <dt>名额</dt><dd>${it.quota ? "120 / " + it.quota : "不限"}</dd>
+      <dt>报名</dt><dd>2026.10.21 14:30 – 2026.10.23 23:59</dd>
+      <dt>活动</dt><dd>2026.10.22 14:30 – 2026.10.22 23:55</dd>
+      <dt>地点</dt><dd>龙凤校区 E2A 宿舍楼到 B5 过道之间</dd>
+      <dt>主办</dt><dd>四川职业技术学院</dd>
+    </dl>
+    <div class="panel-actions">
+      ${joined
+        ? '<button class="btn btn--done" disabled>已报名</button><button class="btn btn--ghost">取消报名</button>'
+        : '<button class="btn btn--solid">立即报名</button><button class="btn btn--ghost">打开原页</button>'}
+    </div>`;
+  document.querySelectorAll(".rows-item").forEach((r) =>
+    r.classList.toggle("is-on", r.dataset.aid === aid));
+  panel.classList.add("is-on");
+  scrim.classList.add("is-on");
+}
+
+const scrim = document.createElement("div");
+scrim.className = "scrim";
+scrim.addEventListener("click", () => {
+  panel.classList.remove("is-on");
+  scrim.classList.remove("is-on");
+});
+document.querySelector(".shell").appendChild(scrim);
+
+document.addEventListener("click", (e) => {
+  const row = e.target.closest(".rows-item");
+  if (row) showDetail(row.dataset.aid);
+});
+
+
+/* 默认不打开详情，点行才滑出 */
+document.getElementById("panelClose").addEventListener("click", () => {
+  panel.classList.remove("is-on");
+  scrim.classList.remove("is-on");
+});
+</script>
+</body>
+</html>

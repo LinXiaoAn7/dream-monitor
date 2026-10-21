@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>到梦空间 · 方案 A「墨白 Ink」</title>
+<style>
+/* ============================================================
+   方案 A · 墨白 Ink
+   参考：Linear（留白与列表密度）、Vercel Geist（发丝线与字重层级）、
+        shadcn/ui（中性色阶 + 单一强调色）
+   令牌：Global → Semantic → Component
+   ============================================================ */
+:root {
+  /* ---- Global：色 ---- */
+  --g-ink-900: #0A0A0B;
+  --g-ink-700: #2A2A2E;
+  --g-ink-500: #6E6E76;
+  --g-ink-300: #A8A8B0;
+  --g-ink-100: #E8E8EC;
+  --g-ink-050: #F3F3F5;
+  --g-white:   #FFFFFF;
+  --g-vermilion: #E23D28;
+  --g-vermilion-soft: #FDECE9;
+
+  /* ---- Global：间距（4px 网格） ---- */
+  --s1: 4px;  --s2: 8px;  --s3: 12px; --s4: 16px;
+  --s5: 24px; --s6: 32px; --s7: 48px; --s8: 64px;
+
+  /* ---- Global：圆角（3 档） ---- */
+  --r-sm: 4px; --r-md: 8px; --r-lg: 14px;
+
+  /* ---- Global：动效 ---- */
+  --dur-micro: 90ms;
+  --dur-local: 150ms;
+  --dur-page: 280ms;
+  --ease-out: cubic-bezier(.16, 1, .3, 1);
+  --ease-in: cubic-bezier(.4, 0, 1, 1);
+  --spring-panel: cubic-bezier(.34, 1.32, .64, 1);
+
+  /* ---- Semantic ---- */
+  --surface-page: var(--g-ink-050);
+  --surface-card: var(--g-white);
+  --surface-sunken: var(--g-ink-050);
+  --text-strong: var(--g-ink-900);
+  --text-body: var(--g-ink-700);
+  --text-mute: var(--g-ink-500);
+  --text-faint: var(--g-ink-300);
+  --border-hair: var(--g-ink-100);
+  --interactive: var(--g-vermilion);
+
+  /* ---- Component ---- */
+  --row-pad-y: var(--s4);
+  --row-gap: var(--s5);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0; padding: 0;
+  background: var(--surface-page);
+  color: var(--text-body);
+  font-family: "Genshin", "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+
+/* ============================ 骨架 ============================ */
+.app {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: var(--s6) var(--s6) var(--s8);
+}
+
+/* ============================ 顶栏 ============================ */
+.top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s5);
+  padding-bottom: var(--s5);
+}
+
+.brand { display: flex; align-items: baseline; gap: var(--s3); }
+
+.brand-name {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  color: var(--text-strong);
+}
+
+.brand-sub {
+  font-size: 11px;
+  letter-spacing: .12em;
+  color: var(--text-faint);
+}
+
+.top-right { display: flex; align-items: center; gap: var(--s4); }
+
+.sync { font-size: 11px; letter-spacing: .08em; color: var(--text-faint); }
+
+.avatar {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: var(--g-ink-100);
+  display: grid; place-items: center;
+  font-size: 11px; font-weight: 500; color: var(--text-mute);
+  transition: transform var(--dur-micro) var(--ease-out);
+}
+.avatar:hover { transform: scale(1.06); }
+
+/* ============================ 视图切换 ============================ */
+.seg {
+  display: inline-flex;
+  gap: var(--s1);
+  padding: var(--s1);
+  background: var(--surface-sunken);
+  border-radius: var(--r-md);
+  margin-bottom: var(--s6);
+  position: relative;
+}
+
+.seg-btn {
+  position: relative;
+  padding: var(--s2) var(--s4);
+  font-size: 13px;
+  letter-spacing: .04em;
+  color: var(--text-mute);
+  border-radius: var(--r-sm);
+  transition: color var(--dur-micro) var(--ease-out);
+}
+
+.seg-btn[aria-selected="true"] { color: var(--text-strong); }
+
+.seg-thumb {
+  position: absolute;
+  top: var(--s1); left: var(--s1);
+  height: calc(100% - var(--s1) * 2);
+  background: var(--surface-card);
+  border-radius: var(--r-sm);
+  box-shadow: 0 1px 2px rgba(10, 10, 11, .06);
+  transform: translateX(0);
+  transition: transform var(--dur-local) var(--spring-panel), width var(--dur-local) var(--ease-out);
+}
+
+/* ============================ 视图 ============================ */
+.view { display: none; }
+.view.is-on { display: block; animation: viewIn var(--dur-page) var(--ease-out) both; }
+
+@keyframes viewIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ============================ 统计行 ============================ */
+.stats {
+  display: flex;
+  gap: var(--s7);
+  padding-bottom: var(--s5);
+  border-bottom: 1px solid var(--border-hair);
+  margin-bottom: var(--s5);
+}
+
+.stat-k { font-size: 11px; letter-spacing: .1em; color: var(--text-faint); margin-bottom: var(--s2); }
+
+.stat-v {
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -.01em;
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-v.is-accent { color: var(--interactive); }
+.stat-v small { font-size: 12px; font-weight: 400; color: var(--text-faint); margin-left: var(--s1); }
+
+/* ============================ 列表 ============================ */
+.list { display: flex; flex-direction: column; }
+
+.row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  gap: var(--row-gap);
+  align-items: baseline;
+  padding: var(--row-pad-y) var(--s2);
+  border-bottom: 1px solid var(--border-hair);
+  border-radius: var(--r-sm);
+  transition: background var(--dur-micro) var(--ease-out),
+              transform var(--dur-micro) var(--ease-out);
+  animation: rowIn var(--dur-page) var(--ease-out) both;
+}
+
+@keyframes rowIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.row:hover { background: var(--surface-card); transform: translateY(-1px); }
+
+.row-idx {
+  font-size: 11px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .06em;
+}
+
+.row-title {
+  margin: 0 0 var(--s1);
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.45;
+  color: var(--text-strong);
+}
+
+.row-meta {
+  display: flex; flex-wrap: wrap; gap: var(--s3);
+  font-size: 11px; letter-spacing: .04em; color: var(--text-faint);
+}
+
+.row-meta .dot { color: var(--g-ink-100); }
+
+.tag {
+  padding: 1px var(--s2);
+  font-size: 10px;
+  letter-spacing: .1em;
+  border: 1px solid var(--border-hair);
+  border-radius: var(--r-sm);
+  color: var(--text-mute);
+}
+.tag.is-open { color: var(--interactive); border-color: currentColor; }
+.tag.is-mine { color: var(--text-strong); border-color: var(--g-ink-300); }
+
+.row-tail { text-align: right; }
+
+.quota {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.01em;
+}
+.quota.is-low { color: var(--interactive); }
+
+.quota-cap { display: block; font-size: 10px; letter-spacing: .1em; color: var(--text-faint); margin-top: 2px; }
+
+/* ============================ 积分 ============================ */
+.score-hero { padding: var(--s7) 0 var(--s6); }
+
+.score-label { font-size: 11px; letter-spacing: .14em; color: var(--text-faint); margin-bottom: var(--s3); }
+
+.score-num {
+  font-size: 88px;
+  font-weight: 700;
+  line-height: .95;
+  letter-spacing: -.03em;
+  color: var(--interactive);
+  font-variant-numeric: tabular-nums;
+}
+.score-num small { font-size: 18px; color: var(--text-faint); margin-left: var(--s2); font-weight: 400; }
+
+.score-meta { margin-top: var(--s4); font-size: 11px; letter-spacing: .06em; color: var(--text-faint); }
+
+/* ============================ 抽屉 ============================ */
+.scrim {
+  position: fixed; inset: 0;
+  background: rgba(10, 10, 11, .28);
+  opacity: 0; pointer-events: none;
+  transition: opacity var(--dur-local) var(--ease-out);
+  backdrop-filter: blur(2px);
+}
+.scrim.is-on { opacity: 1; pointer-events: auto; }
+
+.drawer {
+  position: fixed; top: 0; right: 0; bottom: 0;
+  width: min(420px, 92vw);
+  background: var(--surface-card);
+  border-left: 1px solid var(--border-hair);
+  padding: var(--s6);
+  overflow-y: auto;
+  transform: translateX(100%);
+  transition: transform var(--dur-local) var(--spring-panel);
+}
+.drawer.is-on { transform: none; }
+
+.d-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--s5); }
+.d-cap { font-size: 10px; letter-spacing: .16em; color: var(--text-faint); }
+.d-close { font-size: 18px; color: var(--text-faint); line-height: 1; transition: transform var(--dur-micro) var(--ease-out); }
+.d-close:hover { transform: rotate(90deg); }
+
+.d-title { margin: 0 0 var(--s5); font-size: 19px; font-weight: 700; line-height: 1.4; color: var(--text-strong); }
+
+.d-grid { display: grid; grid-template-columns: 64px 1fr; gap: var(--s3) var(--s4); font-size: 12px; }
+.d-grid dt { color: var(--text-faint); letter-spacing: .06em; }
+.d-grid dd { margin: 0; color: var(--text-body); }
+
+.d-actions { display: flex; gap: var(--s3); margin-top: var(--s6); padding-top: var(--s5); border-top: 1px solid var(--border-hair); }
+
+.btn {
+  padding: var(--s3) var(--s5);
+  border-radius: var(--r-md);
+  font-size: 13px;
+  letter-spacing: .04em;
+  transition: transform var(--dur-micro) var(--ease-out), opacity var(--dur-micro) var(--ease-out);
+}
+.btn:active { transform: scale(.97); }
+.btn--solid { background: var(--g-ink-900); color: var(--g-white); }
+.btn--ghost { border: 1px solid var(--border-hair); color: var(--text-body); }
+.btn--done { background: var(--surface-sunken); color: var(--text-faint); cursor: default; }
+
+.d-hint { font-size: 11px; color: var(--text-faint); align-self: center; }
+
+/* ============================ 窄屏 ============================ */
+@media (max-width: 780px) {
+  .app { padding: var(--s4) var(--s4) var(--s7); }
+  .stats { gap: var(--s5); }
+  .stat-v { font-size: 26px; }
+  .row { grid-template-columns: 20px minmax(0, 1fr) auto; gap: var(--s3); }
+  .score-num { font-size: 64px; }
+}
+
+/* 动效降级：系统开启减少动态时，直接给终态（也方便截图核对） */
+@media (prefers-reduced-motion: reduce) {
+  .panel, .scrim, .rows-item, .chip, .btn, .rail-btn, * { transition: none !important; }
+  .rows-item { animation: none !important; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="top">
+    <div class="brand">
+      <span class="brand-name">到梦空间</span>
+      <span class="brand-sub">四川职业技术学院 · 活动看板</span>
+    </div>
+    <div class="top-right">
+      <span class="sync" id="sync">同步于 20:41</span>
+      <button class="avatar" title="账号">刘烨</button>
+    </div>
+  </header>
+
+  <div class="seg" role="tablist" id="seg">
+    <span class="seg-thumb" id="segThumb"></span>
+    <button class="seg-btn" role="tab" aria-selected="true" data-v="board">活动</button>
+    <button class="seg-btn" role="tab" aria-selected="false" data-v="mine">我的活动</button>
+    <button class="seg-btn" role="tab" aria-selected="false" data-v="score">积分</button>
+  </div>
+
+  <!-- ---------------- 活动 ---------------- -->
+  <section class="view is-on" id="v-board">
+    <div class="stats">
+      <div>
+        <div class="stat-k">可报名</div>
+        <div class="stat-v is-accent">38</div>
+      </div>
+      <div>
+        <div class="stat-k">即将开始</div>
+        <div class="stat-v">16</div>
+      </div>
+      <div>
+        <div class="stat-k">进行中</div>
+        <div class="stat-v">4</div>
+      </div>
+    </div>
+    <div class="list" id="boardList"></div>
+  </section>
+
+  <!-- ---------------- 我的活动 ---------------- -->
+  <section class="view" id="v-mine">
+    <div class="stats">
+      <div>
+        <div class="stat-k">已报名</div>
+        <div class="stat-v">51<small>个</small></div>
+      </div>
+      <div>
+        <div class="stat-k">待审核</div>
+        <div class="stat-v">2</div>
+      </div>
+      <div>
+        <div class="stat-k">已完结</div>
+        <div class="stat-v">43</div>
+      </div>
+    </div>
+    <div class="list" id="mineList"></div>
+  </section>
+
+  <!-- ---------------- 积分 ---------------- -->
+  <section class="view" id="v-score">
+    <div class="score-hero">
+      <div class="score-label">到梦空间积分</div>
+      <div class="score-num">43<small>分</small></div>
+      <div class="score-meta">数据来源：到梦空间「我的」页 · 读取于 10.21 23:48</div>
+    </div>
+  </section>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-hidden="true">
+  <div class="d-head">
+    <span class="d-cap">活动详情</span>
+    <button class="d-close" id="dClose" aria-label="关闭">×</button>
+  </div>
+  <h2 class="d-title" id="dTitle">活动名称</h2>
+  <dl class="d-grid" id="dGrid"></dl>
+  <div class="d-actions" id="dActions"></div>
+</aside>
+
+<script>
+const DATA = [
+  { aid:"16684972", name:"e路同行 清风护航｜网络辟谣主题作品征集活动", cat:"思想引领活动", time:"10.22 17:30 开始", quota:221, mine:true, state:"open" },
+  { aid:"16652489", name:"青听心声—团团熊树洞", cat:"校内管理服务及培训", time:"10.22 09:00 开始", quota:1246, mine:false, state:"open" },
+  { aid:"16705892", name:"“e 路同行 清风护航”志愿宣讲", cat:"志愿服务与公益活动", time:"10.23 14:00 开始", quota:49, mine:false, state:"open" },
+  { aid:"16676470", name:"以声践初心，筑梦新征程 射洪校区合唱团开班典礼", cat:"参与艺术活动", time:"10.22 15:00 开始", quota:10, mine:false, state:"open" },
+  { aid:"16682678", name:"射洪校区-图书馆学生管理委员会—纸书荐书", cat:"参加社会实践", time:"10.24 12:00 开始", quota:807, mine:false, state:"soon" },
+  { aid:"16674589", name:"龙凤校区1号编程爱好者协会——敲启新世界", cat:"相关讲座、活动", time:"10.24 10:30 开始", quota:262, mine:true, state:"soon" },
+  { aid:"16658677", name:"龙凤校区—5号摊位 云川视觉韵律社“光影赴新”", cat:"校内管理服务及培训", time:"10.24 10:30 开始", quota:1000, mine:false, state:"soon" },
+  { aid:"16671354", name:"光影之约，同心观影禁毒观影活动", cat:"相关讲座、活动", time:"10.22 14:30 开始", quota:0, mine:false, state:"full" },
+];
+
+const MINE = [
+  { aid:"16684972", name:"e路同行 清风护航｜网络辟谣主题作品征集活动", cat:"思想引领活动", time:"10.22 17:30", state:"open", statusText:"报名中" },
+  { aid:"16682931", name:"龙凤校区11号摊位青年马克思主义协会赓续红色信仰", cat:"校内管理服务及培训", time:"10.24 08:00", state:"open", statusText:"报名中" },
+  { aid:"16674589", name:"龙凤校区1号编程爱好者协会——敲启新世界", cat:"相关讲座、活动", time:"10.24 10:30", state:"open", statusText:"报名中" },
+  { aid:"16658677", name:"龙凤校区—5号摊位 云川视觉韵律社“光影赴新”", cat:"校内管理服务及培训", time:"10.24 10:30", state:"open", statusText:"等待中" },
+  { aid:"16630112", name:"“智启未来，职引青春”信息技术行业企业进校宣讲会", cat:"相关讲座、活动", time:"10.20 19:00", state:"ended", statusText:"已完结" },
+];
+
+const TAG = { open:"可报名", soon:"未开始", full:"已满员", ended:"已完结" };
+
+function rowHTML(it, i, opts = {}) {
+  const mineTag = it.mine || opts.forceMine ? '<span class="tag is-mine">已报名</span>' : "";
+  const stateTag = opts.statusText
+    ? `<span class="tag ${it.state === "open" ? "is-open" : ""}">${opts.statusText}</span>`
+    : `<span class="tag ${it.state === "open" ? "is-open" : ""}">${TAG[it.state] || ""}</span>`;
+  const tail = opts.statusText
+    ? `<span class="quota">${it.state === "ended" ? "—" : "在列"}</span><span class="quota-cap">状态</span>`
+    : `<span class="quota ${it.quota <= 10 ? "is-low" : ""}">${it.quota === 0 ? "0" : it.quota}</span><span class="quota-cap">剩余名额</span>`;
+  return `
+    <article class="row" data-aid="${it.aid}" style="animation-delay:${Math.min(i, 8) * 22}ms">
+      <span class="row-idx">${String(i + 1).padStart(2, "0")}</span>
+      <div>
+        <h3 class="row-title">${it.name}</h3>
+        <div class="row-meta">${stateTag}${mineTag}<span>${it.cat}</span><span class="dot">·</span><span>${it.time}</span></div>
+      </div>
+      <div class="row-tail">${tail}</div>
+    </article>`;
+}
+
+document.getElementById("boardList").innerHTML = DATA.map((it, i) => rowHTML(it, i)).join("");
+document.getElementById("mineList").innerHTML = MINE.map((it, i) => rowHTML(it, i, { statusText: it.statusText })).join("");
+
+/* ---- 分段控件：滑块 ---- */
+const seg = document.getElementById("seg");
+const thumb = document.getElementById("segThumb");
+function moveThumb(btn) {
+  thumb.style.width = btn.offsetWidth + "px";
+  thumb.style.transform = `translateX(${btn.offsetLeft - 4}px)`;
+}
+function setView(name, btn) {
+  document.querySelectorAll(".seg-btn").forEach((b) => b.setAttribute("aria-selected", String(b === btn)));
+  document.querySelectorAll(".view").forEach((v) => v.classList.remove("is-on"));
+  document.getElementById("v-" + name).classList.add("is-on");
+  moveThumb(btn);
+}
+seg.addEventListener("click", (e) => {
+  const btn = e.target.closest(".seg-btn");
+  if (btn) setView(btn.dataset.v, btn);
+});
+window.addEventListener("load", () => moveThumb(seg.querySelector('[aria-selected="true"]')));
+
+/* ---- 抽屉 ---- */
+const scrim = document.getElementById("scrim");
+const drawer = document.getElementById("drawer");
+function openDrawer(aid) {
+  const all = DATA.concat(MINE);
+  const it = all.find((x) => x.aid === aid) || all[0];
+  document.getElementById("dTitle").textContent = it.name;
+  document.getElementById("dGrid").innerHTML = `
+    <dt>状态</dt><dd>${it.statusText || TAG[it.state]}</dd>
+    <dt>名额</dt><dd>${it.quota ? "120 / " + it.quota : "不限"}</dd>
+    <dt>报名</dt><dd>2026.10.21 14:30 – 2026.10.23 23:59</dd>
+    <dt>活动</dt><dd>2026.10.22 14:30 – 2026.10.22 23:55</dd>
+    <dt>地点</dt><dd>龙凤校区 E2A 宿舍楼到 B5 过道之间</dd>
+    <dt>主办</dt><dd>四川职业技术学院</dd>`;
+  const joined = it.mine || it.aid === "16684972" || it.aid === "16674589";
+  document.getElementById("dActions").innerHTML = joined
+    ? `<button class="btn btn--done" disabled>已报名</button><button class="btn btn--ghost">取消报名</button><span class="d-hint">可以取消报名</span>`
+    : `<button class="btn btn--solid">立即报名</button><span class="d-hint">报名成功后会出现在「我的活动」里</span>`;
+  drawer.classList.add("is-on");
+  drawer.setAttribute("aria-hidden", "false");
+  scrim.classList.add("is-on");
+}
+function closeDrawer() {
+  drawer.classList.remove("is-on");
+  drawer.setAttribute("aria-hidden", "true");
+  scrim.classList.remove("is-on");
+}
+document.addEventListener("click", (e) => {
+  const row = e.target.closest(".row");
+  if (row) openDrawer(row.dataset.aid);
+});
+document.getElementById("dClose").addEventListener("click", closeDrawer);
+scrim.addEventListener("click", closeDrawer);
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawer(); });
+</script>
+</body>
+</html>

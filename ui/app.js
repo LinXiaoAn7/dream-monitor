@@ -318,8 +318,11 @@ function closeDetail() {
 /* ---------------- 视图切换 ---------------- */
 let view = "board";
 
+const VIEW_TITLE = { board: "活动", mine: "我的活动", score: "积分" };
+
 function setView(name, push = true) {
   view = ["score", "mine"].includes(name) ? name : "board";
+  $("pageTitle").textContent = VIEW_TITLE[view];
   $("v-board").hidden = view !== "board";
   $("v-score").hidden = view !== "score";
   $("v-mine").hidden = view !== "mine";
@@ -606,15 +609,24 @@ document.addEventListener("keydown", (e) => {
 });
 
 function setAvatar(me) {
-  const img = $("avatar-img");
+  /* 用背景图而不是 <img>：远端头像挂了也不会出现破图图标 */
+  const btn = $("avatar-btn");
   const fb = $("avatar-fb");
+  const img = $("avatar-img");
+  if (img) img.hidden = true;
   const url = me && me.avatar;
   fb.textContent = (me && me.name ? me.name[0] : "—");
-  if (!url) { img.hidden = true; fb.hidden = false; return; }
-  img.onload = () => { img.hidden = false; fb.hidden = true; };
-  img.onerror = () => { img.hidden = true; fb.hidden = false; };
-  img.src = url;
+  fb.hidden = false;
+  btn.style.backgroundImage = "";
+  if (!url) return;
+  const probe = new Image();
+  probe.onload = () => {
+    btn.style.backgroundImage = `url("${url}")`;
+    fb.hidden = true;
+  };
+  probe.src = url;
 }
+
 
 pull();
 setView(location.hash === "#score" ? "score" : (location.hash === "#mine" ? "mine" : "board"), false);
