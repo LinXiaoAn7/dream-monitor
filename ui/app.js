@@ -17,10 +17,12 @@ function rollNumber(el, to) {
   if (REDUCED) { el.textContent = to; return; }
   const t0 = performance.now();
   const dur = 420;
-  const step = (now) => {
-    const p = Math.min(1, Math.max(0, (now - t0) / dur));
+  /* 用 performance.now() 而不是 rAF 回调的时间戳：后者可能早于 t0，
+     相减得到负数，插值会算出 -3 这种值 */
+  const step = () => {
+    const p = Math.min(1, Math.max(0, (performance.now() - t0) / dur));
     const eased = 1 - Math.pow(1 - p, 3);
-    el.textContent = Math.round(from + (to - from) * eased);
+    el.textContent = p >= 1 ? to : Math.round(from + (to - from) * eased);
     if (p < 1) requestAnimationFrame(step);
   };
   requestAnimationFrame(step);
