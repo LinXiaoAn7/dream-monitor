@@ -323,6 +323,8 @@ const VIEW_TITLE = { board: "活动", mine: "我的活动", score: "积分" };
 function setView(name, push = true) {
   view = ["score", "mine"].includes(name) ? name : "board";
   $("pageTitle").textContent = VIEW_TITLE[view];
+  /* 筛选只属于活动页：我的活动 / 积分 不显示 全部·可报名·未开始 */
+  $("tabs").hidden = view !== "board";
   $("v-board").hidden = view !== "board";
   $("v-score").hidden = view !== "score";
   $("v-mine").hidden = view !== "mine";

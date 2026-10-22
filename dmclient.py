@@ -178,6 +178,8 @@ class DreamClient:
         self.delay = cfg.get("request_delay", 1.0)
         self.ua = _ua_json(cfg)
         self.sess = requests.Session()
+        # 不读系统代理：某些环境会残留 HTTP(S)_PROXY 指向已关闭的本地端口
+        self.sess.trust_env = False
         self.sess.headers.update({
             "standardUA": self.ua,
             "user-agent": "okhttp/3.11.0",

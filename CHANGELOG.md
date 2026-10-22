@@ -2,6 +2,13 @@
 
 本项目的版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)：`主版本.次版本.修订号`。
 
+## [2.1.1] — 2026-10-22
+
+### 修复
+- **筛选 Tab 串页**：「全部 / 可报名 / 未开始」这三个筛选只属于活动页，切到「我的活动」或「积分」时不再残留。`setView()` 里对 `#tabs` 置 `hidden`，并补 `.tabs[hidden]{display:none}`（`display:flex` 会盖掉 hidden 属性）。
+- **头像破图**：远端头像加载失败时不再显示浏览器破图图标，改为纯字母兜底；同时补 `.avatar-img[hidden]{display:none}`（同类 `display:block` 盖掉 hidden 的问题）。
+- **本机登录失败**：客户端禁用环境代理（`requests.Session.trust_env = False`），避免残留 `HTTP(S)_PROXY` 指向已关闭端口时登录报 `ProxyError`。
+
 ## [2.1.0] — 2026-10-22
 
 ### 界面
