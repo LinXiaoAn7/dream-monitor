@@ -660,6 +660,8 @@ class Handler(SimpleHTTPRequestHandler):
             return
 
         if u.path == "/api/auto":
+            if self._need_login():
+                return
             self._json({"items": USERS.auto_list(uid)})
             return
         if u.path == "/api/state":
