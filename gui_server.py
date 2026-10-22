@@ -39,6 +39,7 @@ import yaml  # noqa: E402
 
 from dmclient import DreamClient, ApiError  # noqa: E402
 from monitor import Monitor  # noqa: E402
+import autosign
 from users import Users  # noqa: E402
 
 UI_DIR = ROOT / "ui"
@@ -511,6 +512,7 @@ class Hub:
             "logs": list(reversed(self.logs[-24:])),
             "token_job": self.token_job,
             "mine_warming": not (self._mine_cache and time.time() - self.mine_at < 120),
+            "auto": (USERS.auto_map(self.uid) if USERS else {}),
             "auth": {
                 "stale": bool(getattr(self.mon, "auth_stale", False)),
                 "msg": getattr(self.mon, "auth_msg", ""),
@@ -526,6 +528,7 @@ BASE_CFG: dict = {}
 USERS: Users | None = None
 HUBS: dict[str, Hub] = {}
 HUBS_LOCK = threading.Lock()
+SCHED: "autosign.Scheduler | None" = None
 
 
 def get_hub(uid: str) -> Hub | None:
@@ -656,6 +659,9 @@ class Handler(SimpleHTTPRequestHandler):
                         "school": hub.school if hub else ""})
             return
 
+        if u.path == "/api/auto":
+            self._json({"items": USERS.auto_list(uid)})
+            return
         if u.path == "/api/state":
             if self._need_login():
                 return
@@ -700,7 +706,17 @@ class Handler(SimpleHTTPRequestHandler):
                 return
             try:
                 det = hub.mon.client.detail(aid) or {}
-                self._json({k: det.get(k) for k in DETAIL_KEYS})
+                out = {k: det.get(k) for k in DETAIL_KEYS}
+                # 补上归一化结果：前端要靠 state / sign_start 判断能否「定时报名」
+                try:
+                    from rules import normalize
+                    n = normalize(det, hub.cfg.get("status_map"))
+                    out["state"] = n.get("state")
+                    out["sign_start"] = n.get("sign_start")
+                    out["sign_end"] = n.get("sign_end")
+                except Exception:  # noqa: BLE001
+                    pass
+                self._json(out)
             except Exception as e:  # noqa: BLE001
                 self._json({"error": f"{type(e).__name__}: {e}"}, 500)
             return
@@ -788,6 +804,49 @@ class Handler(SimpleHTTPRequestHandler):
         elif u.path == "/api/token":
             hub.refresh_token()
             self._json({"ok": True})
+        elif u.path in ("/api/auto", "/api/auto/cancel"):
+            aid = str(body.get("aid") or "").strip()
+            if not aid:
+                self._json({"ok": False, "error": "缺少活动 ID"}, 400)
+                return
+            if u.path == "/api/auto/cancel":
+                USERS.auto_del(uid, aid)
+                self._json({"ok": True, "msg": "已取消定时报名"})
+                return
+            # 取报名开始时间：优先显式传入，其次详情
+            at = body.get("at")
+            try:
+                at_f = float(at) if at not in (None, "") else 0.0
+            except (TypeError, ValueError):
+                at_f = 0.0
+            name = hub._name_of(aid)
+            if not name or name == aid:
+                try:
+                    _d = hub.mon.client.detail(aid) or {}
+                    name = str(_d.get("activityName") or _d.get("name") or name)
+                except Exception:  # noqa: BLE001
+                    pass
+            if not at_f:
+                try:
+                    d = hub.mon.client.detail(aid)
+                    from rules import normalize
+                    n = normalize(d, hub.cfg.get("status_map"))
+                    at_f = float(n.get("sign_start") or 0)   # normalize 已归一到「秒」
+                    if at_f > 1e11:
+                        at_f /= 1000.0
+                    if not name:
+                        name = str(n.get("name") or "")
+                except Exception as e:  # noqa: BLE001
+                    self._json({"ok": False, "error": f"拿不到报名开始时间：{e}"}, 400)
+                    return
+            if not at_f:
+                self._json({"ok": False, "error": "这条活动没有报名开始时间"}, 400)
+                return
+            if at_f * 1000 < time.time() * 1000:
+                pass  # 已经到点也允许加，调度器会立刻尝试
+            USERS.auto_add(uid, aid, name, at_f)
+            hub.log(f"已设定时报名：{name[:20]}｜{time.strftime('%m-%d %H:%M:%S', time.localtime(at_f))}")
+            self._json({"ok": True, "msg": "已设定时报名", "at": at_f})
         elif u.path in ("/api/signup", "/api/cancel"):
             aid = str(body.get("aid") or "").strip()
             try:
@@ -830,6 +889,10 @@ def main() -> int:
         USERS.upsert(uid=str(api["uid"]), account=str(api["account"]),
                      password=str(api["password"]), token=str(api.get("token") or ""))
         print(f"已迁移老配置账号：{api['account']}")
+
+    global SCHED
+    SCHED = autosign.Scheduler(USERS, get_hub, log=lambda m: print(m, flush=True))
+    SCHED.start()
 
     httpd = Server((args.host, args.port), Handler)
     shown = "127.0.0.1" if args.host in ("0.0.0.0", "::") else args.host

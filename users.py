@@ -44,6 +44,18 @@ CREATE TABLE IF NOT EXISTS sessions (
     expires REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_uid ON sessions(uid);
+CREATE TABLE IF NOT EXISTS auto_signup (
+    uid        TEXT NOT NULL,
+    aid        TEXT NOT NULL,
+    name       TEXT DEFAULT '',
+    join_start REAL NOT NULL,
+    status     TEXT NOT NULL DEFAULT 'pending',
+    note       TEXT DEFAULT '',
+    created    REAL NOT NULL,
+    fired_at   REAL,
+    PRIMARY KEY (uid, aid)
+);
+CREATE INDEX IF NOT EXISTS idx_auto_start ON auto_signup(status, join_start);
 """
 
 
@@ -163,6 +175,52 @@ class Users:
         return str(d / f"{uid}.db")
 
     # ------------------------------------------------------------------ 会话
+    # ------------------------------------------------------------- 定时报名
+    def auto_add(self, uid: str, aid: str, name: str, join_start: float) -> None:
+        """新增/覆盖一条定时报名（同一活动只保留一条）。"""
+        now = time.time()
+        with self._conn() as c:
+            c.execute(
+                "INSERT INTO auto_signup (uid, aid, name, join_start, status, note, created) "
+                "VALUES (?,?,?,?,'pending','',?) "
+                "ON CONFLICT(uid, aid) DO UPDATE SET "
+                "  name=excluded.name, join_start=excluded.join_start, "
+                "  status='pending', note='', created=excluded.created, fired_at=NULL",
+                (str(uid), str(aid), name or "", float(join_start), now),
+            )
+
+    def auto_list(self, uid: str) -> list[dict]:
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT * FROM auto_signup WHERE uid=? ORDER BY join_start ASC", (str(uid),)
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def auto_map(self, uid: str) -> dict:
+        """aid -> {status, join_start} 供列表页标记用。"""
+        return {r["aid"]: {"status": r["status"], "join_start": r["join_start"]}
+                for r in self.auto_list(uid)}
+
+    def auto_del(self, uid: str, aid: str) -> None:
+        with self._conn() as c:
+            c.execute("DELETE FROM auto_signup WHERE uid=? AND aid=?", (str(uid), str(aid)))
+
+    def auto_due(self, now: float, window: float = 15.0) -> list[dict]:
+        """到点（或即将到点）的待办：join_start - window <= now。"""
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT * FROM auto_signup WHERE status IN ('pending','retry') AND join_start-? <= ? "
+                "ORDER BY join_start ASC", (float(window), float(now)),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def auto_mark(self, uid: str, aid: str, status: str, note: str = "") -> None:
+        with self._conn() as c:
+            c.execute(
+                "UPDATE auto_signup SET status=?, note=?, fired_at=? WHERE uid=? AND aid=?",
+                (status, note or "", time.time(), str(uid), str(aid)),
+            )
+
     def new_session(self, uid: str) -> str:
         sid = secrets.token_hex(24)
         now = time.time()

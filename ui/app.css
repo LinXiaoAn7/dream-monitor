@@ -604,6 +604,13 @@ h1, h2, h3, p { margin: 0; }
 .confirm-text { font-size: 12px; line-height: 1.7; color: var(--text-body); }
 .confirm-actions { display: flex; justify-content: flex-end; gap: var(--s3); margin-top: var(--s5); }
 
+
+/* ---------------- 定时报名 ---------------- */
+.row--auto { align-items: center; }
+.tag--auto { color: var(--text-dim); border: 1px solid var(--border-hair); }
+.tag--auto.is-live { color: var(--accent); border-color: var(--accent); }
+.row--auto .btn--sm { align-self: center; }
+
 /* ============================ 窄屏 ============================ */
 @media (max-width: 900px) {
   .shell { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }

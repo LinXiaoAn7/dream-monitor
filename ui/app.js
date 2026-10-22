@@ -220,6 +220,20 @@ async function openDetail(aid) {
       <button class="btn btn--solid" id="d-join" type="button">立即报名</button>
       <span class="d-hint">报名成功后会出现在「我的活动」里</span>
     </div>`;
+  } else if (d.state === "soon") {
+    const auto = (S.auto || {})[aid];
+    if (auto) {
+      action = `<div class="d-actions">
+        <button class="btn btn--done" id="d-auto-on" type="button" disabled>已设定时</button>
+        <button class="btn btn--ghost" id="d-auto-off" type="button">取消定时</button>
+        <span class="d-hint">${esc(fmtClock(auto.join_start))} 由服务器自动报名</span>
+      </div>`;
+    } else {
+      action = `<div class="d-actions">
+        <button class="btn btn--solid" id="d-auto" type="button">定时报名</button>
+        <span class="d-hint">报名一开始（${esc(fmtClock(signStart(d)))}）就自动提交，服务器执行</span>
+      </div>`;
+    }
   } else {
     const why = d.state === "soon" ? "报名还没开始"
       : (d.state === "full" ? "名额已满"
@@ -233,10 +247,127 @@ async function openDetail(aid) {
     + (isReview ? `<div class="drawer-note"><b>审核制</b>　待审核的人也占名额，这里显示的剩余可能偏乐观，最终以 App 为准。</div>` : "")
     + action;
 
+  const ab = $("d-auto");
+  if (ab) ab.addEventListener("click", () => doAuto(aid, signStart(d)));
+  const ao = $("d-auto-off");
+  if (ao) ao.addEventListener("click", () => doAutoCancel(aid));
   const jb = $("d-join");
   if (jb) jb.addEventListener("click", () => doSignup(aid));
   const cb = $("d-cancel");
   if (cb) cb.addEventListener("click", () => doCancel(aid));
+}
+
+
+/* ---------------- 定时报名 ---------------- */
+function fmtClock(sec) {
+  const t = Number(sec);
+  if (!t) return "—";
+  const dt = new Date(t * 1000);
+  const p2 = (n) => String(n).padStart(2, "0");
+  return `${p2(dt.getMonth() + 1)}-${p2(dt.getDate())} ${p2(dt.getHours())}:${p2(dt.getMinutes())}`;
+}
+
+/* 从详情里推报名开始时间（秒）。后端也会算，这里传过去更准。 */
+function signStart(d) {
+  if (!d) return 0;
+  const raw = d.joinstartdate ?? d.joinStartTime ?? d.signupStartTime ?? d.applyStartTime;
+  if (raw !== undefined && raw !== null && /^\d{10,13}$/.test(String(raw))) {
+    const t = Number(raw);
+    return t > 1e11 ? Math.floor(t / 1000) : t;
+  }
+  const txt = String(d.joindate || "");
+  const m = txt.match(/(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})\s+(\d{1,2}):(\d{2})/);
+  if (m) {
+    return Math.floor(new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime() / 1000);
+  }
+  return 0;
+}
+
+const AUTO_LABEL = {
+  pending: "等待中", retry: "尝试中", success: "已报名", failed: "未成功", cancelled: "已取消",
+};
+
+async function doAuto(aid, at) {
+  const item = (S.items || []).find((i) => i.aid === aid) || {};
+  const name = item.name || "这条活动";
+  const ok = await ask({
+    title: "设定时报名？",
+    text: `「${name}」报名一开始（${fmtClock(at)}），服务器会自动替你提交报名。需要你保持在本站登录状态；手机端被挤下线不影响。`,
+    ok: "设定时",
+  });
+  if (!ok) return;
+  const btn = $("d-auto");
+  if (btn) { btn.disabled = true; btn.textContent = "设置中…"; }
+  try {
+    const r = await fetch("/api/auto", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ aid, at: at || 0 }),
+    });
+    const j = await r.json();
+    if (!r.ok || j.ok === false) throw new Error(j.error || ("HTTP " + r.status));
+    toast(j.msg || "已设定时报名");
+    await pull();
+    await openDetail(aid);
+  } catch (e) {
+    toast("设置失败：" + (e && e.message || e));
+    if (btn) { btn.disabled = false; btn.textContent = "定时报名"; }
+  }
+}
+
+async function doAutoCancel(aid) {
+  const ok = await ask({ title: "取消定时？", text: "取消后这条活动不会再自动报名。", ok: "取消定时" });
+  if (!ok) return;
+  try {
+    const r = await fetch("/api/auto/cancel", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ aid }),
+    });
+    const j = await r.json();
+    if (!r.ok || j.ok === false) throw new Error(j.error || ("HTTP " + r.status));
+    toast("已取消定时");
+    await pull();
+    await openDetail(aid);
+    if (view === "auto") loadAuto();
+  } catch (e) {
+    toast("取消失败：" + (e && e.message || e));
+  }
+}
+
+async function loadAuto() {
+  const box = $("auto-list");
+  if (!box) return;
+  let j;
+  try {
+    const r = await fetch("/api/auto");
+    j = await r.json();
+    if (!r.ok) throw new Error(j.error || ("HTTP " + r.status));
+  } catch (e) {
+    box.innerHTML = `<div class="empty">读取失败：${esc(String(e && e.message || e))}</div>`;
+    return;
+  }
+  const items = j.items || [];
+  $("auto-note").textContent = items.length
+    ? `共 ${items.length} 条定时任务 · 到点由服务器自动报名（浏览器关掉也会执行）`
+    : "还没有定时任务。到「活动」里点开一条未开始的活动，选「定时报名」。";
+  if (!items.length) { box.innerHTML = ""; return; }
+  box.innerHTML = items.map((it, idx) => {
+    const live = it.status === "pending" || it.status === "retry";
+    return `<div class="row row--auto">
+      <span class="row-idx">${String(idx + 1).padStart(2, "0")}</span>
+      <div class="row-main">
+        <h3 class="row-title">${esc(it.name || it.aid)}</h3>
+        <p class="row-sub">
+          <span class="tag tag--auto ${live ? "is-live" : ""}">${AUTO_LABEL[it.status] || it.status}</span>
+          <span class="row-cat">${esc(fmtClock(it.join_start))} 触发</span>
+          ${it.note ? `<span class="row-place">${esc(String(it.note).slice(0, 40))}</span>` : ""}
+        </p>
+      </div>
+      ${live ? `<button class="btn btn--ghost btn--sm" data-auto-off="${esc(it.aid)}" type="button">取消</button>` : ""}
+    </div>`;
+  }).join("");
+  box.querySelectorAll("[data-auto-off]").forEach((b) => {
+    b.addEventListener("click", () => doAutoCancel(b.getAttribute("data-auto-off")));
+  });
 }
 
 /* 轻提示 */
@@ -318,23 +449,26 @@ function closeDetail() {
 /* ---------------- 视图切换 ---------------- */
 let view = "board";
 
-const VIEW_TITLE = { board: "活动", mine: "我的活动", score: "积分" };
+const VIEW_TITLE = { board: "活动", mine: "我的活动", auto: "定时报名", score: "积分" };
 
 function setView(name, push = true) {
-  view = ["score", "mine"].includes(name) ? name : "board";
+  view = ["score", "mine", "auto"].includes(name) ? name : "board";
   $("pageTitle").textContent = VIEW_TITLE[view];
   /* 筛选只属于活动页：我的活动 / 积分 不显示 全部·可报名·未开始 */
   $("tabs").hidden = view !== "board";
   $("v-board").hidden = view !== "board";
   $("v-score").hidden = view !== "score";
   $("v-mine").hidden = view !== "mine";
+  $("v-auto").hidden = view !== "auto";
   document.querySelectorAll(".rail-item").forEach((b) =>
     b.classList.toggle("is-on", b.dataset.v === view));
   if (push) {
-    const h = view === "score" ? "#score" : (view === "mine" ? "#mine" : "#board");
+    const h = view === "score" ? "#score"
+      : (view === "mine" ? "#mine" : (view === "auto" ? "#auto" : "#board"));
     if (location.hash !== h) history.replaceState(null, "", h);
   }
   if (view === "score") loadScore();
+  if (view === "auto") loadAuto();
   if (view === "mine") loadMine();
 }
 
@@ -643,6 +777,7 @@ window.addEventListener("hashchange", () => {
   if (m) openDetail(m[1]);
 });
 if (/^#aid=/.test(location.hash)) openDetail(location.hash.slice(5));
+if (location.hash === "#auto") setView("auto", false);
 
 /* 平时 15 秒同步一次；后端还在补详情（enriching）时改成 0.9 秒，
    这样名额/地点是一格一格填上来的，不用干等。 */
