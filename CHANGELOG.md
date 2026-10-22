@@ -2,6 +2,20 @@
 
 本项目的版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)：`主版本.次版本.修订号`。
 
+## [2.2.2] — 2026-10-22
+
+### 修复
+- **线上跑约 30 分钟后整站无响应（严重）**：`users.py` 里 15 处 `with self._conn() as c:` 只提交事务、
+  从不关闭连接，每次调用漏一个文件描述符；涨到 1024（默认 `RLIMIT_NOFILE`）后 sqlite 报
+  `OperationalError: unable to open database file`，调度器每 2 秒刷一条错误，HTTP 请求全部挂住。
+  改为 `_db()` 上下文管理器，`try/finally` 里必定 `close()`。
+- `detail_cache.py` 原用 `threading.local` 缓存连接，但 Web 服务是「一请求一线程」，
+  线程结束连接不关，同样会泄漏。改为每次调用新建连接（sqlite 打开本地库只要几十微秒）。
+- `gui_server.py` 登录时丢弃旧 Hub 前先 `mon.close()`，避免用户库连接被遗弃。
+
+### 加固
+- systemd unit 增加 `LimitNOFILE=65536`，作为同类问题兜底。
+
 ## [2.2.1] — 2026-10-22
 
 ### 修复

@@ -16,6 +16,7 @@ import hmac
 import os
 import secrets
 import sqlite3
+from contextlib import contextmanager
 import time
 from pathlib import Path
 
@@ -65,7 +66,7 @@ class Users:
         self.dir.mkdir(parents=True, exist_ok=True)
         self.db_path = self.dir / "users.db"
         self.key = self._load_key()
-        with self._conn() as c:
+        with self._db() as c:
             c.executescript(SCHEMA)
             self._migrate(c)
 
@@ -96,6 +97,21 @@ class Users:
         c.row_factory = sqlite3.Row
         return c
 
+    @contextmanager
+    def _db(self):
+        """算上提交与关闭。
+
+        `with sqlite3.connect(...)` 只管事务、不关连接，每次调用都会漏一个文件描述符；
+        长时间运行的进程会被 RLIMIT_NOFILE（默认 1024）耗尽，报
+        `OperationalError: unable to open database file`，HTTP 也随之卡死。
+        """
+        c = self._conn()
+        try:
+            yield c
+            c.commit()
+        finally:
+            c.close()
+
     # -------------------------------------------------------------- 密码加解密
     def encrypt(self, plain: str) -> str:
         iv = os.urandom(16)
@@ -118,7 +134,7 @@ class Users:
         student_id = str(p.get("student_id", ""))
         phone = str(p.get("phone", ""))
         avatar = str(p.get("avatar", ""))
-        with self._conn() as c:
+        with self._db() as c:
             c.execute(
                 "INSERT INTO users(uid,account,name,school,college,student_id,phone,avatar,"
                 " pwd_enc,token,created,last_seen)"
@@ -136,12 +152,12 @@ class Users:
         return self.get(uid) or {}
 
     def get(self, uid: str) -> dict | None:
-        with self._conn() as c:
+        with self._db() as c:
             row = c.execute("SELECT * FROM users WHERE uid=?", (uid,)).fetchone()
         return dict(row) if row else None
 
     def by_account(self, account: str) -> dict | None:
-        with self._conn() as c:
+        with self._db() as c:
             row = c.execute("SELECT * FROM users WHERE account=?", (account,)).fetchone()
         return dict(row) if row else None
 
@@ -156,16 +172,16 @@ class Users:
         return self.decrypt(u["pwd_enc"]) if u else ""
 
     def set_token(self, uid: str, token: str) -> None:
-        with self._conn() as c:
+        with self._db() as c:
             c.execute("UPDATE users SET token=?, last_seen=? WHERE uid=?",
                       (token, time.time(), uid))
 
     def touch(self, uid: str) -> None:
-        with self._conn() as c:
+        with self._db() as c:
             c.execute("UPDATE users SET last_seen=? WHERE uid=?", (time.time(), uid))
 
     def count(self) -> int:
-        with self._conn() as c:
+        with self._db() as c:
             return int(c.execute("SELECT COUNT(*) FROM users").fetchone()[0])
 
     def db_for(self, uid: str) -> str:
@@ -179,7 +195,7 @@ class Users:
     def auto_add(self, uid: str, aid: str, name: str, join_start: float) -> None:
         """新增/覆盖一条定时报名（同一活动只保留一条）。"""
         now = time.time()
-        with self._conn() as c:
+        with self._db() as c:
             c.execute(
                 "INSERT INTO auto_signup (uid, aid, name, join_start, status, note, created) "
                 "VALUES (?,?,?,?,'pending','',?) "
@@ -190,7 +206,7 @@ class Users:
             )
 
     def auto_list(self, uid: str) -> list[dict]:
-        with self._conn() as c:
+        with self._db() as c:
             rows = c.execute(
                 "SELECT * FROM auto_signup WHERE uid=? ORDER BY join_start ASC", (str(uid),)
             ).fetchall()
@@ -202,12 +218,12 @@ class Users:
                 for r in self.auto_list(uid)}
 
     def auto_del(self, uid: str, aid: str) -> None:
-        with self._conn() as c:
+        with self._db() as c:
             c.execute("DELETE FROM auto_signup WHERE uid=? AND aid=?", (str(uid), str(aid)))
 
     def auto_due(self, now: float, window: float = 15.0) -> list[dict]:
         """到点（或即将到点）的待办：join_start - window <= now。"""
-        with self._conn() as c:
+        with self._db() as c:
             rows = c.execute(
                 "SELECT * FROM auto_signup WHERE status IN ('pending','retry') AND join_start-? <= ? "
                 "ORDER BY join_start ASC", (float(window), float(now)),
@@ -215,7 +231,7 @@ class Users:
         return [dict(r) for r in rows]
 
     def auto_mark(self, uid: str, aid: str, status: str, note: str = "") -> None:
-        with self._conn() as c:
+        with self._db() as c:
             c.execute(
                 "UPDATE auto_signup SET status=?, note=?, fired_at=? WHERE uid=? AND aid=?",
                 (status, note or "", time.time(), str(uid), str(aid)),
@@ -224,7 +240,7 @@ class Users:
     def new_session(self, uid: str) -> str:
         sid = secrets.token_hex(24)
         now = time.time()
-        with self._conn() as c:
+        with self._db() as c:
             c.execute("INSERT INTO sessions(sid,uid,created,expires) VALUES(?,?,?,?)",
                       (sid, uid, now, now + SESSION_DAYS * 86400))
             c.execute("DELETE FROM sessions WHERE expires<?", (now,))
@@ -233,14 +249,14 @@ class Users:
     def session_uid(self, sid: str) -> str | None:
         if not sid:
             return None
-        with self._conn() as c:
+        with self._db() as c:
             row = c.execute("SELECT uid,expires FROM sessions WHERE sid=?", (sid,)).fetchone()
         if not row or row["expires"] < time.time():
             return None
         return str(row["uid"])
 
     def drop_session(self, sid: str) -> None:
-        with self._conn() as c:
+        with self._db() as c:
             c.execute("DELETE FROM sessions WHERE sid=?", (sid,))
 
 

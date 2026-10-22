@@ -79,6 +79,8 @@ Environment=TZ=Asia/Shanghai
 ExecStart=$PYBIN $APP_DIR/gui_server.py --no-open
 Restart=always
 RestartSec=5
+# 兜底：默认 1024 个文件描述符，长时间运行容易被句柄耗尽
+LimitNOFILE=65536
 
 [Install]
 WantedBy=multi-user.target

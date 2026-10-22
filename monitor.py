@@ -633,6 +633,13 @@ class Monitor:
         except Exception as e:  # noqa: BLE001
             log.warning("写回设备指纹失败：%s", e)
 
+    def close(self) -> None:
+        """释放本用户持有的资源（sqlite 连接）。"""
+        try:
+            self.store.close()
+        except Exception:  # noqa: BLE001
+            pass
+
     def tick(self) -> tuple[int, str]:
         try:
             acts = self.fetch_all()

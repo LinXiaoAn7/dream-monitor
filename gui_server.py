@@ -775,7 +775,12 @@ class Handler(SimpleHTTPRequestHandler):
             sid = USERS.new_session(uid)
             # 登录后必须丢掉旧 Hub：它内存里还揣着失效的 token 和 stale 标记
             if USERS is not None and "HUBS" in globals():
-                HUBS.pop(uid, None)
+                _old = HUBS.pop(uid, None)
+                if _old is not None:
+                    try:
+                        _old.mon.close()
+                    except Exception:  # noqa: BLE001
+                        pass
             get_hub(uid)
             self._json(
                 {"ok": True, "uid": uid, "kicked_phone": kicked,
